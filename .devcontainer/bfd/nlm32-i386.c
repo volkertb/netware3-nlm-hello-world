@@ -160,6 +160,10 @@ nlm_i386_write_import (bfd * abfd, asection * sec, arelent * rel)
       || rel->howto->dst_mask != 0xffffffff)
     {
       bfd_set_error (bfd_error_invalid_operation);
+      fprintf (
+        stderr,
+        "Cannot convert this file to NLM: object file does not meet NetWare's code relocation requirements.\n"
+      );
       return FALSE;
     }
 
@@ -185,11 +189,12 @@ nlm_i386_write_import (bfd * abfd, asection * sec, arelent * rel)
   if (! bfd_is_und_section (bfd_get_section (sym)))
     {
       /* NetWare only supports absolute internal relocs.  */
-      if (rel->howto->pc_relative)
-	{
-	  bfd_set_error (bfd_error_invalid_operation);
-	  return FALSE;
-	}
+ //      if (rel->howto->pc_relative)
+	// {
+	//   bfd_set_error (bfd_error_invalid_operation);
+	//   fprintf (stderr, "Cannot convert this file to NLM: NetWare only supports absolute internal relocs.\n");
+	//   return FALSE;
+	// }
 
       /* The high bit is 1 if the reloc is against the code section, 0
 	 if against the data section.  */
@@ -208,6 +213,10 @@ nlm_i386_write_import (bfd * abfd, asection * sec, arelent * rel)
 	  if (! rel->howto->pcrel_offset)
 	    {
 	      bfd_set_error (bfd_error_invalid_operation);
+	      fprintf (
+	        stderr,
+	        "Cannot convert this file to NLM: PC relative relocs on NetWare must be pcrel_offset."
+	      );
 	      return FALSE;
 	    }
 	}
