@@ -1,5 +1,4 @@
-ARG BUILDPLATFORM=linux/386
-FROM --platform=${BUILDPLATFORM} debian:9.13 AS builder
+FROM debian:9.13 AS builder
 
 # Debian 9 (Stretch) is the last Debian release that has a binutils lower than version 2.31, but no nlmconv by default.
 # GNU ld (GNU Binutils for Debian) 2.28
@@ -46,9 +45,10 @@ WORKDIR /Downloads/binutils-2.30/
 RUN apt -y install build-essential
 # `makeinfo` is apparently needed when any of the binutils sources and/or texi files have been changed:
 RUN apt -y install texinfo
+# For nlncomv to work properly, we need to fake 32-bit Linux when running configure before building binutils.
 RUN linux32 ./configure --prefix=/usr/local --enable-targets=i386-netware --enable-obsolete
-RUN linux32 make
-RUN linux32 make install
+RUN make
+RUN make install
 #RUN man nlmconv
 RUN nlmconv --version
 RUN ld -v
@@ -82,9 +82,11 @@ RUN sed -i.bak 's/gcc /gcc -m32 -fno-pic /g' src/Makefile
 
 RUN nlmconv --help
 
-RUN linux32 make all install
+RUN apt -y install gcc-multilib
 
-RUN linux32 make install-include
+RUN make all install
+
+RUN make install-include
 
 #RUN ls -lh /usr/nwsdk/include/
 #RUN ls -lh /usr/nwsdk/include/nwcalls.h
@@ -103,7 +105,7 @@ RUN sed -i.bak 's/CFLAGS = /CFLAGS = -m32 -fno-pic /g' Makefile
 RUN sed -i.bak 's/nlmconv --output-target/nlmconv --debug --output-target/g' Makefile
 RUN mv hello.o hello_orig.o
 RUN mv hello.nlm hello_orig.nlm
-RUN linux32 make
+RUN make
 RUN ls -lh hello.o
 RUN ls -lh hello.nlm
 RUN ls -lh hello*
