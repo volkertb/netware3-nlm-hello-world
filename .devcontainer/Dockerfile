@@ -88,16 +88,6 @@ RUN make all install
 
 RUN make install-include
 
-# Allows curl to be installed with apt-get.
-# With thanks to https://unix.stackexchange.com/a/749304
-RUN echo "deb http://archive.debian.org/debian-security stretch/updates main" >> /etc/apt/sources.list
-RUN apt -y update
-
-# Install dependencies required to allow this to be used as a Dev Container
-# (see https://www.jetbrains.com/help/rider/Prerequisites_for_dev_containers.html#remote_container)
-RUN apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 procps  # FIXME
-# gcompat is only needed on non-glibc systems, such as Alpine Linux
-
 # Perform a test build
 WORKDIR /Downloads
 RUN tar xf nlm-samples.tar.bz2
@@ -126,5 +116,33 @@ RUN mcopy -i /nlm_disk.img *.nlm ::
 RUN mcopy -i /nlm_disk.img /usr/nwsdk/lib/smp/threads.nlm ::
 RUN mdir -i /nlm_disk.img ::
 
-FROM --platform=${BUILDPLATFORM} debian:9.13
+FROM debian:10.1 AS dev-env
 COPY --from=builder /nlm_disk.img /nlm_disk.img
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /usr/nwsdk /usr/nwsdk
+COPY --from=builder /usr/bin/nlmimp /usr/bin/nlmimp
+
+RUN apt -y update
+
+RUN apt -y install build-essential gcc-multilib
+
+# Install dependencies required to allow this to be used as a Dev Container
+# (see https://www.jetbrains.com/help/rider/Prerequisites_for_dev_containers.html#remote_container)
+RUN apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 procps git
+# gcompat is only needed on non-glibc systems, such as Alpine Linux
+
+# Perform a test build
+COPY --from=builder /Downloads/nlm-samples /Downloads/nlm-samples
+WORKDIR /Downloads/nlm-samples/hello
+# Change the standard `Hello world!` message to a custom one, to make it clear it's the one from this build.
+RUN sed -i.bak "s/Hello world!/Well, hello there! (built at $(date))/g" hello.c
+# Force the compiler on 64-bit x86 OS to compile for 32-bit x86 architecture (i386)
+# The `-fno-pic` option is needed to ensure that we get a Global Offset Table, see https://stackoverflow.com/a/45422495
+RUN sed -i.bak 's/CFLAGS = /CFLAGS = -m32 -fno-pic /g' Makefile
+# Enable debugging in nlmconv for troubleshooting weird `Invalid operation` error
+RUN sed -i.bak 's/nlmconv --output-target/nlmconv --debug --output-target/g' Makefile
+RUN mv hello.o hello_orig.o
+RUN mv hello.nlm hello_orig.nlm
+RUN make
+RUN ls -lh hello.o
+RUN ls -lh hello.nlm
