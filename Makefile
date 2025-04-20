@@ -1,7 +1,7 @@
 # makefile for "hello world" NLM
 
 CC = gcc
-CFLAGS = -Wall -O2 -g -I/usr/nwsdk/include/ -nostdinc -fno-builtin -fpack-struct
+CFLAGS = -m32 -fno-pic -Wall -O2 -g -I/usr/nwsdk/include/ -nostdinc -fno-builtin -fpack-struct
 
 all:		hello.nlm
 
