@@ -88,13 +88,19 @@ RUN make all install
 
 RUN make install-include
 
-#RUN ls -lh /usr/nwsdk/include/
-#RUN ls -lh /usr/nwsdk/include/nwcalls.h
+# Allows curl to be installed with apt-get.
+# With thanks to https://unix.stackexchange.com/a/749304
+RUN echo "deb http://archive.debian.org/debian-security stretch/updates main" >> /etc/apt/sources.list
+RUN apt -y update
 
-WORKDIR /Downloads
-RUN tar xf nlm-samples.tar.bz2
+# Install dependencies required to allow this to be used as a Dev Container
+# (see https://www.jetbrains.com/help/rider/Prerequisites_for_dev_containers.html#remote_container)
+RUN apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 procps  # FIXME
+# gcompat is only needed on non-glibc systems, such as Alpine Linux
 
 # Perform a test build
+WORKDIR /Downloads
+RUN tar xf nlm-samples.tar.bz2
 WORKDIR /Downloads/nlm-samples/hello
 # Change the standard `Hello world!` message to a custom one, to make it clear it's the one from this build.
 RUN sed -i.bak "s/Hello world!/Well, hello there! (built at $(date))/g" hello.c
@@ -119,13 +125,6 @@ RUN mformat -C -f 1440 -i /nlm_disk.img ::
 RUN mcopy -i /nlm_disk.img *.nlm ::
 RUN mcopy -i /nlm_disk.img /usr/nwsdk/lib/smp/threads.nlm ::
 RUN mdir -i /nlm_disk.img ::
-
-# RUN echo "Continue working on the build file here" && false # FIXME remove and complete this Dockerfile
-
-# Install dependencies required to allow this to be used as a Dev Container
-# (see https://www.jetbrains.com/help/rider/Prerequisites_for_dev_containers.html#remote_container)
-#RUN apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 procps  # FIXME
-# gcompat is only needed on non-glibc systems, such as Alpine Linux
 
 FROM --platform=${BUILDPLATFORM} debian:9.13
 COPY --from=builder /nlm_disk.img /nlm_disk.img
