@@ -146,3 +146,6 @@ RUN mv hello.nlm hello_orig.nlm
 RUN make
 RUN ls -lh hello.o
 RUN ls -lh hello.nlm
+
+# Make mtools available in the dev container, so built NLM files can be packaged in ready-to-mount floppy images
+RUN apt -y install mtools

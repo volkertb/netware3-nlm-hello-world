@@ -1,1 +1,4 @@
 .idea
+*.img
+*.nlm
+*.o
