@@ -45,9 +45,19 @@ ADD --checksum=sha256:$DOWNLOAD_NLM_KIT_SHA256 \
 # With thanks to https://unix.stackexchange.com/a/743863
 RUN echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
 
-RUN apt -y update
+# Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
+# baking them into image layers or re-downloading them every time. Debian images delete
+# downloaded packages after each install by default, hence removing docker-clean here.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-RUN apt -y install xz-utils
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y update
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install xz-utils
 WORKDIR /Downloads
 RUN tar xf binutils-2.30.tar.xz
 
@@ -66,9 +76,13 @@ RUN ls /Downloads/binutils-2.30/bfd/nlm32-i386.c
 WORKDIR /Downloads/binutils-2.30/
 # With thanks to https://soufianebouchaa.medium.com/how-to-compile-binutils-on-ubuntu-debian-ec268674b759
 # Also thanks to https://www.experts-exchange.com/questions/20145508/nlmconv-not-working.html (--enable-targets=all)
-RUN apt -y install build-essential
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install build-essential
 # `makeinfo` is apparently needed when any of the binutils sources and/or texi files have been changed:
-RUN apt -y install texinfo
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install texinfo
 # For nlncomv to work properly, we need to fake 32-bit Linux when running configure before building binutils.
 RUN linux32 ./configure --prefix=/usr/local --enable-targets=i386-netware --enable-obsolete
 RUN make
@@ -79,11 +93,15 @@ RUN ld -v
 
 WORKDIR /Downloads
 
-RUN apt -y install xorriso
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install xorriso
 RUN xorriso -osirrox on -indev ./NOVSDKCD_4.iso -extract / /Downloads/NOVSDKCD_4
 WORKDIR /Downloads/NOVSDKCD_4/FUTURES/NWSDK/NLMNIT
 RUN ls -lh
-RUN apt -y install zip
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install zip
 RUN zip -r /tmp/ndk.zip .
 WORKDIR /usr/nwsdk
 # Unpack NDK directories and files in lower case:
@@ -92,7 +110,9 @@ RUN ls -lh /usr/nwsdk/include/nwconio.h
 
 WORKDIR /Downloads
 
-RUN apt -y install bzip2
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install bzip2
 RUN tar xf nlm-kit-0.1.tar.bz2
 WORKDIR /Downloads/nlm-kit-0.1
 
@@ -106,7 +126,9 @@ RUN sed -i.bak 's/gcc /gcc -m32 -fno-pic /g' src/Makefile
 
 RUN nlmconv --help
 
-RUN apt -y install gcc-multilib
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install gcc-multilib
 
 RUN make all install
 
@@ -131,7 +153,9 @@ RUN ls -lh hello.nlm
 RUN ls -lh hello*
 
 # Package the built NLM file in a ready-to-mount floppy image
-RUN apt -y install mtools
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install mtools
 # With thanks to https://labex.io/tutorials/linux-linux-mtools-command-with-practical-examples-422829
 RUN dd if=/dev/zero of=/tmp/nlm_disk.img bs=1440k count=1
 # With thanks to https://msfn.org/board/topic/120444-how-to-install-windows-from-usb-winsetupfromusb-with-gui/page/108/
@@ -151,13 +175,25 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /usr/nwsdk /usr/nwsdk
 COPY --from=builder /usr/bin/nlmimp /usr/bin/nlmimp
 
-RUN apt -y update
+# Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
+# baking them into image layers or re-downloading them every time. Debian images delete
+# downloaded packages after each install by default, hence removing docker-clean here.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-RUN apt -y install build-essential gcc-multilib
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y update
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install build-essential gcc-multilib
 
 # Install dependencies required to allow this to be used as a Dev Container
 # (see https://www.jetbrains.com/help/rider/Prerequisites_for_dev_containers.html#remote_container)
-RUN apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 procps git
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 procps git
 # gcompat is only needed on non-glibc systems, such as Alpine Linux
 
 # Create the default user. See https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user
@@ -165,11 +201,15 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME
 
 # Make mtools available in the dev container, so built NLM files can be packaged in ready-to-mount floppy images
-RUN apt -y install mtools
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install mtools
 
 # Workaround for the issue with Background task "Starting ReSharper C++ Engine..." hanging in the JetBrains client IDE
 # With thanks to https://youtrack.jetbrains.com/issue/IJPL-191705/Start-Failed-PluginException-empty-file-Plugin-com.intellij#focus=Comments-27-12184816.0-0
-RUN apt -y install libicu-dev
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install libicu-dev
 
 # Copy the NLM samples from the builder stage and make them available to the non-root user for the test build below
 COPY --from=builder /Downloads/nlm-samples /home/$USERNAME/Downloads/nlm-samples
