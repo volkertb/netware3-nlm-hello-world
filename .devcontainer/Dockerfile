@@ -1,21 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+
 FROM debian:9.13 AS builder
+
+# Before building, run `python3 -m http.server 8086 -d ./download_cache &` (`.devcontainer` being the current directory)
+
+ARG DOWNLOAD_BINUTILS_FILE_NAME=binutils-2.30.tar.xz
+ARG DOWNLOAD_BINUTILS_INTERNET_PATH=https://ftp.gnu.org/gnu/binutils/$DOWNLOAD_BINUTILS_FILE_NAME
+ARG DOWNLOAD_BINUTILS_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_BINUTILS_FILE_NAME
+ARG DOWNLOAD_BINUTILS_SHA256=6e46b8aeae2f727a36f0bd9505e405768a72218f1796f0d09757d45209871ae6
+
+ARG DOWNLOAD_NOVSDKCD_4_FILE_NAME=NOVSDKCD_4.iso
+ARG DOWNLOAD_NOVSDKCD_4_INTERNET_PATH=https://archive.org/download/novsdkcd-4/$DOWNLOAD_NOVSDKCD_4_FILE_NAME
+ARG DOWNLOAD_NOVSDKCD_4_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_NOVSDKCD_4_FILE_NAME
+ARG DOWNLOAD_NOVSDKCD_4_SHA256=4255e7426002007fffc60cb6167230ecbd2207772d54481bbeb9da6ee7005193
+
+ARG DOWNLOAD_NLM_SAMPLES_FILE_NAME=nlm-samples.tar.bz2
+ARG DOWNLOAD_NLM_SAMPLES_INTERNET_PATH=https://web.archive.org/web/20050227034206if_/http://www.penguin.cz:80/~mhi/ftp/nlm/$DOWNLOAD_NLM_SAMPLES_FILE_NAME
+ARG DOWNLOAD_NLM_SAMPLES_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_NLM_SAMPLES_FILE_NAME
+ARG DOWNLOAD_NLM_SAMPLES_SHA256=72cd8a19d06558a0e6704a489c806b9ccb050e59321393f7b6dd11b944f0fdb4
+
+ARG DOWNLOAD_NLM_KIT_FILE_NAME=nlm-kit-0.1.tar.bz2
+ARG DOWNLOAD_NLM_KIT_INTERNET_PATH=https://web.archive.org/web/20050227034206if_/http://www.penguin.cz:80/~mhi/ftp/nlm/$DOWNLOAD_NLM_KIT_FILE_NAME
+ARG DOWNLOAD_NLM_KIT_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_NLM_KIT_FILE_NAME
+ARG DOWNLOAD_NLM_KIT_SHA256=0e407c3f231e5ceb47ca387a7c0e82b64e81620df3871e2110290fb0effa3fe1
 
 # Debian 9 (Stretch) is the last Debian release that has a binutils lower than version 2.31, but no nlmconv by default.
 # GNU ld (GNU Binutils for Debian) 2.28
 
-ADD --checksum=sha256:6e46b8aeae2f727a36f0bd9505e405768a72218f1796f0d09757d45209871ae6 \
-    https://ftp.gnu.org/gnu/binutils/binutils-2.30.tar.xz /Downloads/
+ADD --checksum=sha256:$DOWNLOAD_BINUTILS_SHA256 \
+    $DOWNLOAD_BINUTILS_BUILD_HOST_PATH /Downloads/
 
-ADD --checksum=sha256:4255e7426002007fffc60cb6167230ecbd2207772d54481bbeb9da6ee7005193 \
-    https://archive.org/download/novsdkcd-4/NOVSDKCD_4.iso \
+ADD --checksum=sha256:$DOWNLOAD_NOVSDKCD_4_SHA256 \
+    $DOWNLOAD_NOVSDKCD_4_BUILD_HOST_PATH \
     /Downloads/
 
-ADD --checksum=sha256:72cd8a19d06558a0e6704a489c806b9ccb050e59321393f7b6dd11b944f0fdb4 \
-    https://web.archive.org/web/20050227034206if_/http://www.penguin.cz:80/~mhi/ftp/nlm/nlm-samples.tar.bz2 \
+ADD --checksum=sha256:$DOWNLOAD_NLM_SAMPLES_SHA256 \
+    $DOWNLOAD_NLM_SAMPLES_BUILD_HOST_PATH \
     /Downloads/
 
-ADD --checksum=sha256:0e407c3f231e5ceb47ca387a7c0e82b64e81620df3871e2110290fb0effa3fe1 \
-    https://web.archive.org/web/20050227034206if_/http://www.penguin.cz:80/~mhi/ftp/nlm/nlm-kit-0.1.tar.bz2 \
+ADD --checksum=sha256:$DOWNLOAD_NLM_KIT_SHA256 \
+    $DOWNLOAD_NLM_KIT_BUILD_HOST_PATH \
     /Downloads/
 
 # With thanks to https://unix.stackexchange.com/a/743863
@@ -116,7 +140,12 @@ RUN mcopy -i /nlm_disk.img *.nlm ::
 RUN mcopy -i /nlm_disk.img /usr/nwsdk/lib/smp/threads.nlm ::
 RUN mdir -i /nlm_disk.img ::
 
-FROM debian:10.1 AS dev-env
+FROM debian:11.11 AS dev-env
+
+ARG USERNAME=dev-container-user
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
 COPY --from=builder /nlm_disk.img /nlm_disk.img
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /usr/nwsdk /usr/nwsdk
@@ -131,9 +160,26 @@ RUN apt -y install build-essential gcc-multilib
 RUN apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 procps git
 # gcompat is only needed on non-glibc systems, such as Alpine Linux
 
-# Perform a test build
-COPY --from=builder /Downloads/nlm-samples /Downloads/nlm-samples
-WORKDIR /Downloads/nlm-samples/hello
+# Create the default user. See https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+
+# Make mtools available in the dev container, so built NLM files can be packaged in ready-to-mount floppy images
+RUN apt -y install mtools
+
+# Workaround for the issue with Background task "Starting ReSharper C++ Engine..." hanging in the JetBrains client IDE
+# With thanks to https://youtrack.jetbrains.com/issue/IJPL-191705/Start-Failed-PluginException-empty-file-Plugin-com.intellij#focus=Comments-27-12184816.0-0
+RUN apt -y install libicu-dev
+
+# Copy the NLM samples from the builder stage and make them available to the non-root user for the test build below
+COPY --from=builder /Downloads/nlm-samples /home/$USERNAME/Downloads/nlm-samples
+RUN chown -R $USERNAME /home/$USERNAME/Downloads/nlm-samples
+
+# Switch from root to the default user. See https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user
+USER $USERNAME
+
+# Perform a test build as the non-root user
+WORKDIR /home/$USERNAME/Downloads/nlm-samples/hello
 # Change the standard `Hello world!` message to a custom one, to make it clear it's the one from this build.
 RUN sed -i.bak "s/Hello world!/Well, hello there! (built at $(date))/g" hello.c
 # Force the compiler on 64-bit x86 OS to compile for 32-bit x86 architecture (i386)
@@ -147,5 +193,5 @@ RUN make
 RUN ls -lh hello.o
 RUN ls -lh hello.nlm
 
-# Make mtools available in the dev container, so built NLM files can be packaged in ready-to-mount floppy images
-RUN apt -y install mtools
+# Make the (current) non-root user's home directory the default work directory for this container image.
+WORKDIR /home/$USERNAME
