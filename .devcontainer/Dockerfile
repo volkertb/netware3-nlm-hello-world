@@ -2,48 +2,37 @@
 
 FROM debian:9.13 AS builder
 
-# Before building, run `python3 -m http.server 8086 -d ./download_cache &` (`.devcontainer` being the current directory)
-
 ARG DOWNLOAD_BINUTILS_FILE_NAME=binutils-2.30.tar.xz
 ARG DOWNLOAD_BINUTILS_INTERNET_PATH=https://ftp.gnu.org/gnu/binutils/$DOWNLOAD_BINUTILS_FILE_NAME
-ARG DOWNLOAD_BINUTILS_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_BINUTILS_FILE_NAME
 ARG DOWNLOAD_BINUTILS_SHA256=6e46b8aeae2f727a36f0bd9505e405768a72218f1796f0d09757d45209871ae6
 
 ARG DOWNLOAD_NOVSDKCD_4_FILE_NAME=NOVSDKCD_4.iso
 ARG DOWNLOAD_NOVSDKCD_4_INTERNET_PATH=https://archive.org/download/novsdkcd-4/$DOWNLOAD_NOVSDKCD_4_FILE_NAME
-ARG DOWNLOAD_NOVSDKCD_4_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_NOVSDKCD_4_FILE_NAME
 ARG DOWNLOAD_NOVSDKCD_4_SHA256=4255e7426002007fffc60cb6167230ecbd2207772d54481bbeb9da6ee7005193
 
 ARG DOWNLOAD_NLM_SAMPLES_FILE_NAME=nlm-samples.tar.bz2
 ARG DOWNLOAD_NLM_SAMPLES_INTERNET_PATH=https://web.archive.org/web/20050227034206if_/http://www.penguin.cz:80/~mhi/ftp/nlm/$DOWNLOAD_NLM_SAMPLES_FILE_NAME
-ARG DOWNLOAD_NLM_SAMPLES_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_NLM_SAMPLES_FILE_NAME
 ARG DOWNLOAD_NLM_SAMPLES_SHA256=72cd8a19d06558a0e6704a489c806b9ccb050e59321393f7b6dd11b944f0fdb4
 
 ARG DOWNLOAD_NLM_KIT_FILE_NAME=nlm-kit-0.1.tar.bz2
 ARG DOWNLOAD_NLM_KIT_INTERNET_PATH=https://web.archive.org/web/20050227034206if_/http://www.penguin.cz:80/~mhi/ftp/nlm/$DOWNLOAD_NLM_KIT_FILE_NAME
-ARG DOWNLOAD_NLM_KIT_BUILD_HOST_PATH=http://localhost:8086/$DOWNLOAD_NLM_KIT_FILE_NAME
 ARG DOWNLOAD_NLM_KIT_SHA256=0e407c3f231e5ceb47ca387a7c0e82b64e81620df3871e2110290fb0effa3fe1
 
 # Debian 9 (Stretch) is the last Debian release that has a binutils lower than version 2.31, but no nlmconv by default.
 # GNU ld (GNU Binutils for Debian) 2.28
 
-ADD --checksum=sha256:$DOWNLOAD_BINUTILS_SHA256 \
-    $DOWNLOAD_BINUTILS_BUILD_HOST_PATH /Downloads/
-
-ADD --checksum=sha256:$DOWNLOAD_NOVSDKCD_4_SHA256 \
-    $DOWNLOAD_NOVSDKCD_4_BUILD_HOST_PATH \
-    /Downloads/
-
-ADD --checksum=sha256:$DOWNLOAD_NLM_SAMPLES_SHA256 \
-    $DOWNLOAD_NLM_SAMPLES_BUILD_HOST_PATH \
-    /Downloads/
-
-ADD --checksum=sha256:$DOWNLOAD_NLM_KIT_SHA256 \
-    $DOWNLOAD_NLM_KIT_BUILD_HOST_PATH \
-    /Downloads/
-
 # With thanks to https://unix.stackexchange.com/a/743863
-RUN echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
+# The debian-security line is required too, not just the base stretch suite - point-release
+# package updates (e.g. the exact libcurl3/libgnutls30 versions other packages depend on) only
+# live there once archived.
+RUN printf '%s\n%s\n' \
+    "deb http://archive.debian.org/debian stretch main contrib non-free" \
+    "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" \
+    > /etc/apt/sources.list
+
+# archive.debian.org's Release files have long-expired Valid-Until dates, which apt otherwise
+# refuses to use.
+RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/no-check-valid-until
 
 # Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
 # baking them into image layers or re-downloading them every time. Debian images delete
@@ -54,6 +43,44 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt -y update
+
+# wget/ca-certificates fetch the large downloads below ourselves, since ADD (previously used
+# for its declarative --checksum flag) can't use cache mounts - only RUN can. wget rather than
+# curl: curl pulls in an exact-pinned libcurl3 version that archive.debian.org's stretch repo
+# can't satisfy on this EOL release, while wget's dependency chain is much lighter.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install wget ca-certificates
+
+RUN mkdir -p /Downloads
+
+# Each of these is fetched once into a cache mount and reused across builds. The skip-download
+# check is gated on checksum success, not just file presence, so a partial/corrupt cached file
+# (e.g. from a build that got interrupted mid-download) is redownloaded rather than getting
+# stuck failing forever.
+RUN --mount=type=cache,target=/downloads-cache \
+    [ -f /downloads-cache/$DOWNLOAD_BINUTILS_FILE_NAME ] && echo "$DOWNLOAD_BINUTILS_SHA256  /downloads-cache/$DOWNLOAD_BINUTILS_FILE_NAME" | sha256sum --status -c - \
+    || wget -q -O /downloads-cache/$DOWNLOAD_BINUTILS_FILE_NAME $DOWNLOAD_BINUTILS_INTERNET_PATH \
+    && echo "$DOWNLOAD_BINUTILS_SHA256  /downloads-cache/$DOWNLOAD_BINUTILS_FILE_NAME" | sha256sum -c - \
+    && cp /downloads-cache/$DOWNLOAD_BINUTILS_FILE_NAME /Downloads/
+
+RUN --mount=type=cache,target=/downloads-cache \
+    [ -f /downloads-cache/$DOWNLOAD_NOVSDKCD_4_FILE_NAME ] && echo "$DOWNLOAD_NOVSDKCD_4_SHA256  /downloads-cache/$DOWNLOAD_NOVSDKCD_4_FILE_NAME" | sha256sum --status -c - \
+    || wget -q -O /downloads-cache/$DOWNLOAD_NOVSDKCD_4_FILE_NAME $DOWNLOAD_NOVSDKCD_4_INTERNET_PATH \
+    && echo "$DOWNLOAD_NOVSDKCD_4_SHA256  /downloads-cache/$DOWNLOAD_NOVSDKCD_4_FILE_NAME" | sha256sum -c - \
+    && cp /downloads-cache/$DOWNLOAD_NOVSDKCD_4_FILE_NAME /Downloads/
+
+RUN --mount=type=cache,target=/downloads-cache \
+    [ -f /downloads-cache/$DOWNLOAD_NLM_SAMPLES_FILE_NAME ] && echo "$DOWNLOAD_NLM_SAMPLES_SHA256  /downloads-cache/$DOWNLOAD_NLM_SAMPLES_FILE_NAME" | sha256sum --status -c - \
+    || wget -q -O /downloads-cache/$DOWNLOAD_NLM_SAMPLES_FILE_NAME $DOWNLOAD_NLM_SAMPLES_INTERNET_PATH \
+    && echo "$DOWNLOAD_NLM_SAMPLES_SHA256  /downloads-cache/$DOWNLOAD_NLM_SAMPLES_FILE_NAME" | sha256sum -c - \
+    && cp /downloads-cache/$DOWNLOAD_NLM_SAMPLES_FILE_NAME /Downloads/
+
+RUN --mount=type=cache,target=/downloads-cache \
+    [ -f /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME ] && echo "$DOWNLOAD_NLM_KIT_SHA256  /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME" | sha256sum --status -c - \
+    || wget -q -O /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME $DOWNLOAD_NLM_KIT_INTERNET_PATH \
+    && echo "$DOWNLOAD_NLM_KIT_SHA256  /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME" | sha256sum -c - \
+    && cp /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME /Downloads/
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
