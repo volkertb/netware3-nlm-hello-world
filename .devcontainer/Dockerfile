@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
-FROM debian:9.13 AS builder
+# All large downloads fetched once, up front, into a cache mount and reused across builds by
+# every later stage that needs one - a current Debian release with clean apt repos, so wget just
+# works with no EOL-archive workarounds needed.
+FROM debian:11.11 AS downloader
 
 ARG DOWNLOAD_BINUTILS_FILE_NAME=binutils-2.30.tar.xz
 ARG DOWNLOAD_BINUTILS_INTERNET_PATH=https://ftp.gnu.org/gnu/binutils/$DOWNLOAD_BINUTILS_FILE_NAME
@@ -18,22 +21,6 @@ ARG DOWNLOAD_NLM_KIT_FILE_NAME=nlm-kit-0.1.tar.bz2
 ARG DOWNLOAD_NLM_KIT_INTERNET_PATH=https://web.archive.org/web/20050227034206if_/http://www.penguin.cz:80/~mhi/ftp/nlm/$DOWNLOAD_NLM_KIT_FILE_NAME
 ARG DOWNLOAD_NLM_KIT_SHA256=0e407c3f231e5ceb47ca387a7c0e82b64e81620df3871e2110290fb0effa3fe1
 
-# Debian 9 (Stretch) is the last Debian release that has a binutils lower than version 2.31, but no nlmconv by default.
-# GNU ld (GNU Binutils for Debian) 2.28
-
-# With thanks to https://unix.stackexchange.com/a/743863
-# The debian-security line is required too, not just the base stretch suite - point-release
-# package updates (e.g. the exact libcurl3/libgnutls30 versions other packages depend on) only
-# live there once archived.
-RUN printf '%s\n%s\n' \
-    "deb http://archive.debian.org/debian stretch main contrib non-free" \
-    "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" \
-    > /etc/apt/sources.list
-
-# archive.debian.org's Release files have long-expired Valid-Until dates, which apt otherwise
-# refuses to use.
-RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/no-check-valid-until
-
 # Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
 # baking them into image layers or re-downloading them every time. Debian images delete
 # downloaded packages after each install by default, hence removing docker-clean here.
@@ -42,15 +29,8 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt -y update
-
-# wget/ca-certificates fetch the large downloads below ourselves, since ADD (previously used
-# for its declarative --checksum flag) can't use cache mounts - only RUN can. wget rather than
-# curl: curl pulls in an exact-pinned libcurl3 version that archive.debian.org's stretch repo
-# can't satisfy on this EOL release, while wget's dependency chain is much lighter.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt -y install wget ca-certificates
+    apt -y update \
+    && apt -y install wget ca-certificates
 
 RUN mkdir -p /Downloads
 
@@ -81,6 +61,32 @@ RUN --mount=type=cache,target=/downloads-cache \
     || wget -q -O /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME $DOWNLOAD_NLM_KIT_INTERNET_PATH \
     && echo "$DOWNLOAD_NLM_KIT_SHA256  /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME" | sha256sum -c - \
     && cp /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME /Downloads/
+
+# Debian 9 (Stretch) is the last Debian release that has a binutils lower than version 2.31, but no nlmconv by default.
+# GNU ld (GNU Binutils for Debian) 2.28
+#
+# Compiling binutils 2.30's obsolete NLM target support needs an old-enough toolchain - nothing
+# upstream tests --enable-obsolete targets like nlm32-i386 against newer GCC/glibc, and even here
+# (a period-matched toolchain) the source needs patching below to build and work correctly. Only
+# the binutils build itself needs Debian 9, so this stage is kept to just that: everything else
+# that used to happen alongside it runs in the "builder" stage below instead, on a current Debian
+# release with working, non-archived apt repos.
+FROM debian:9.13 AS binutils-builder
+
+COPY --from=downloader /Downloads/binutils-2.30.tar.xz /Downloads/
+
+# With thanks to https://unix.stackexchange.com/a/743863
+RUN echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
+
+# Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
+# baking them into image layers or re-downloading them every time. Debian images delete
+# downloaded packages after each install by default, hence removing docker-clean here.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y update
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -117,6 +123,30 @@ RUN make install
 #RUN man nlmconv
 RUN nlmconv --version
 RUN ld -v
+
+# A current Debian release with normal, non-archived apt repos - avoids the whole class of
+# archive.debian.org/EOL-dependency problems for everything that doesn't actually need Debian 9.
+# Old (Debian 9-compiled) binaries run fine on a newer glibc, so the nlmconv/ld built above just
+# gets copied in and used here as-is.
+FROM debian:11.11 AS builder
+
+COPY --from=binutils-builder /usr/local /usr/local
+RUN nlmconv --version && ld -v
+
+# Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
+# baking them into image layers or re-downloading them every time. Debian images delete
+# downloaded packages after each install by default, hence removing docker-clean here.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y update
+
+RUN mkdir -p /Downloads
+COPY --from=downloader /Downloads/NOVSDKCD_4.iso /Downloads/
+COPY --from=downloader /Downloads/nlm-samples.tar.bz2 /Downloads/
+COPY --from=downloader /Downloads/nlm-kit-0.1.tar.bz2 /Downloads/
 
 WORKDIR /Downloads
 
@@ -155,7 +185,7 @@ RUN nlmconv --help
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt -y install gcc-multilib
+    apt -y install build-essential gcc-multilib
 
 RUN make all install
 
