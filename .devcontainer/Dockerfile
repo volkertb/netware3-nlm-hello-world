@@ -184,6 +184,10 @@ USER $USERNAME
 # on PATH for every shell and process in this image, login or not.
 ENV PATH="/home/$USERNAME/.local/bin:$PATH"
 
+# Install Claude Code natively as this user (not via the npm-based devcontainer feature,
+# which leaves a root-owned leftover that later breaks auto-update permissions).
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
 # Perform a test build as the non-root user
 WORKDIR /home/$USERNAME/Downloads/nlm-samples/hello
 # Change the standard `Hello world!` message to a custom one, to make it clear it's the one from this build.

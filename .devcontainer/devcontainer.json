@@ -15,11 +15,6 @@
   // /dev/kvm is locked to the "kvm" group instead, this will need "--group-add=keep-groups" (Podman-only)
   // or an equivalent fix added back.
   "runArgs": ["--device=/dev/kvm"],
-  // Let's see if the Claude devcontainer feature works with older Debian container base images too
-  // See https://code.claude.com/docs/en/devcontainer
-  "features": {
-    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
-  },
   // Generic, tool-agnostic persistent volume. Nothing writes to it by default -
   // see postCreateCommand below for how to actually use it.
   "mounts": [
