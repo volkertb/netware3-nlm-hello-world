@@ -2,5 +2,31 @@
   "build": {
     // Path is relative to the devcontainer.json file.
     "dockerfile": "Dockerfile"
-  }
+  },
+  // Gets rid of the "user was not specified" error in JetBrains IDEs at the end of the Podman container image build
+  // Should be the same as the USER configured in the Dockerfile.
+  // If no explicit USER is specified in the Dockerfile (which is recommended), this value should be set to "root".
+  "containerUser": "dev-container-user",
+  // Pass /dev/kvm through so a QEMU instance (run in-container or in a sidecar this container talks to)
+  // can use KVM acceleration. Requires /dev/kvm to exist on the host (i.e. the host itself supports KVM,
+  // not just a nested VM without it). On this host /dev/kvm is mode 0666 (systemd's default udev rule),
+  // so no group-membership workaround (e.g. Podman's "--group-add=keep-groups") is needed here — the
+  // device's own permission bits already allow any user to open it. If this ever moves to a host where
+  // /dev/kvm is locked to the "kvm" group instead, this will need "--group-add=keep-groups" (Podman-only)
+  // or an equivalent fix added back.
+  "runArgs": ["--device=/dev/kvm"],
+  // Let's see if the Claude devcontainer feature works with older Debian container base images too
+  // See https://code.claude.com/docs/en/devcontainer
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  // Generic, tool-agnostic persistent volume. Nothing writes to it by default -
+  // see postCreateCommand below for how to actually use it.
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-agent-state,target=/home/dev-container-user/.agent-state,type=volume"
+  ],
+  // Optionally create your own .devcontainer/postCreate.local.sh (gitignored) to
+  // symlink specific coding-agent config/state directories (e.g. ~/.claude) into
+  // the volume mounted above, so they survive devcontainer rebuilds.
+  "postCreateCommand": "[ -f .devcontainer/postCreate.local.sh ] && bash .devcontainer/postCreate.local.sh || true"
 }

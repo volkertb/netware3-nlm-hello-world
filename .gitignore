@@ -2,3 +2,4 @@
 *.img
 *.nlm
 *.o
+.devcontainer/postCreate.local.sh
