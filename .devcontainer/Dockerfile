@@ -162,7 +162,7 @@ RUN apt -y install curl unzip libxext6 libxrender1 libxtst6 libxi6 libfreetype6 
 
 # Create the default user. See https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user
 RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME
 
 # Make mtools available in the dev container, so built NLM files can be packaged in ready-to-mount floppy images
 RUN apt -y install mtools
@@ -177,6 +177,12 @@ RUN chown -R $USERNAME /home/$USERNAME/Downloads/nlm-samples
 
 # Switch from root to the default user. See https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user
 USER $USERNAME
+
+# Debian's skel files add ~/.local/bin to PATH via ~/.profile, but that's only sourced by
+# login shells - not the non-login shells VS Code's integrated terminal (and most tooling)
+# actually spawns. Set it via ENV instead, so user-installed binaries under ~/.local/bin are
+# on PATH for every shell and process in this image, login or not.
+ENV PATH="/home/$USERNAME/.local/bin:$PATH"
 
 # Perform a test build as the non-root user
 WORKDIR /home/$USERNAME/Downloads/nlm-samples/hello
