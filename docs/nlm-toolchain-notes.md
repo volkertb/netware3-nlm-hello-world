@@ -74,6 +74,23 @@ Mechanism, two layers deep:
   intermediates. nlmconv finds `i386-netware-ld` by itself (its fork's `LD_NAME` default, sibling
   directory or PATH); no Makefile needs to pass `-l`.
 
+## Watch list: modern-gcc landmines that have NOT bitten yet (predictions, not verified)
+
+The `.eh_frame` story generalizes: gcc defaults that postdate NetWare can inject things the NLM
+pipeline can't handle. None of these have been observed here — the current tiny NLMs don't
+trigger them — but check these first when a bigger NLM misbehaves despite a clean `verify-nlm`:
+
+- `-fstack-protector-strong` (a Debian gcc default) triggers on functions with arrays/large
+  locals and emits references to `__stack_chk_fail`/`__stack_chk_guard` — which would become
+  unresolved imports at load time. Remedy: `-fno-stack-protector` in CFLAGS.
+- `-fcf-protection` emits a `.note.gnu.property` section (allocatable → would land in the NLM
+  data image as junk). Remedy: `-fcf-protection=none`.
+- gcc ≥ 14 treats implicit function declarations as hard errors; vintage K&R-ish sources (e.g.
+  nlm-kit, sample code) may need `-std=gnu89` to build at all.
+- nlmconv leaves a partial output `.nlm` behind when conversion fails mid-way — never judge
+  success by the file's existence, only by exit status (the Makefile's `verify-nlm` step already
+  enforces this).
+
 ## nlmconv `.def` parsing: bad numbers
 
 Stock binutils-2.30 nlmconv treats a malformed number (e.g. `STACK bladiebla`) as a *warning*

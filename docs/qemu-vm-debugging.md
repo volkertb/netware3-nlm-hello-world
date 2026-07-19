@@ -45,6 +45,11 @@ python3/socat/jq for the QMP client side, already installed).
   [nlm-toolchain-notes.md](nlm-toolchain-notes.md) has the durable conclusions. The automated
   reset-and-retry loop is for whatever the next such saga turns out to be.
 - The dev container already ships the QMP client side: python3, socat, jq.
+- Worth doing in the NLM *before* building the automation: restore 80×25 text mode before exiting
+  (e.g. `set_text_mode()` in `modes.c`, or reprogram the registers back). After a graphics-mode
+  test the server only *looks* hung — the console keeps running and writing to the invisible text
+  buffer (observed 2026-07-19; blind-typed commands would likely still work) — but without the
+  restore, every automated graphics test ends in a VM reset instead of a clean next iteration.
 
 ## Starting point for research
 
