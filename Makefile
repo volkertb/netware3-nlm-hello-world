@@ -1,7 +1,9 @@
 # makefile for "hello world" NLM
 
 CC = gcc
-CFLAGS = -m32 -fno-pic -Wall -O2 -g -I/usr/nwsdk/include/ -nostdinc -fno-builtin -fpack-struct
+# -fno-asynchronous-unwind-tables: gcc's .eh_frame carries PC-relative relocs the NLM format
+# cannot represent (nlmconv rejects them; NetWare never reads .eh_frame anyway).
+CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tables -Wall -O2 -g -I/usr/nwsdk/include/ -nostdinc -fno-builtin -fpack-struct
 
 all:		floppy.img
 

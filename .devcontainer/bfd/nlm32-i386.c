@@ -188,13 +188,26 @@ nlm_i386_write_import (bfd * abfd, asection * sec, arelent * rel)
 
   if (! bfd_is_und_section (bfd_get_section (sym)))
     {
-      /* NetWare only supports absolute internal relocs.  */
- //      if (rel->howto->pc_relative)
-	// {
-	//   bfd_set_error (bfd_error_invalid_operation);
-	//   fprintf (stderr, "Cannot convert this file to NLM: NetWare only supports absolute internal relocs.\n");
-	//   return FALSE;
-	// }
+      /* NetWare only supports absolute internal relocs.  Do NOT disable
+	 this check: emitting a PC-relative site as an absolute fixup makes
+	 the loader add the image base to an already-final displacement,
+	 corrupting the call/jump at load time (wild jumps, abends).
+	 Same-code-segment cases are resolved and removed earlier, in
+	 nlmconv.c:i386_mangle_relocs; anything still reaching this point
+	 is genuinely unrepresentable in the NLM format.  The usual modern
+	 culprit is gcc's .eh_frame (PC32 records against .text from a
+	 data section) - compile with -fno-asynchronous-unwind-tables.  */
+      if (rel->howto->pc_relative)
+	{
+	  bfd_set_error (bfd_error_invalid_operation);
+	  fprintf (stderr,
+		   "Cannot convert this file to NLM: it contains a PC-relative"
+		   " relocation against an internal symbol that does not live"
+		   " in the same code segment as the relocation site (often"
+		   " gcc's .eh_frame section; recompile with"
+		   " -fno-asynchronous-unwind-tables).\n");
+	  return FALSE;
+	}
 
       /* The high bit is 1 if the reloc is against the code section, 0
 	 if against the data section.  */

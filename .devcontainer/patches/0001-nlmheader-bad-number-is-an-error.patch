@@ -1,0 +1,30 @@
+Treat a malformed number in an NLM .def file as a fatal error, not a warning.
+
+Stock nlmconv prints 'bad number' for e.g. 'STACK bladiebla' but still exits 0
+and silently writes strtol()'s fallback value 0 into the header field (stack
+size, version, etc.), which is far more dangerous than failing the build.
+nlmheader.c is bison output shipped in the release tarball; it is patched
+identically so the fix applies without regenerating it (no bison needed).
+
+--- binutils-2.30.orig/binutils/nlmheader.y	2026-07-19 12:27:38.118678752 +0000
++++ binutils-2.30/binutils/nlmheader.y	2026-07-19 12:27:38.119755761 +0000
+@@ -858,7 +858,7 @@
+ 
+   ret = strtol (s, &send, 10);
+   if (*send != '\0')
+-    nlmheader_warn (_("bad number"), -1);
++    nlmheader_error (_("bad number"));
+   return ret;
+ }
+ 
+--- binutils-2.30.orig/binutils/nlmheader.c	2026-07-19 12:27:38.120925687 +0000
++++ binutils-2.30/binutils/nlmheader.c	2026-07-19 12:27:38.121953577 +0000
+@@ -2537,7 +2537,7 @@
+ 
+   ret = strtol (s, &send, 10);
+   if (*send != '\0')
+-    nlmheader_warn (_("bad number"), -1);
++    nlmheader_error (_("bad number"));
+   return ret;
+ }
+ 

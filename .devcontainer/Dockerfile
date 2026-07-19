@@ -94,17 +94,35 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 WORKDIR /Downloads
 RUN tar xf binutils-2.30.tar.xz
 
-# Patch error output in nlmconv to help with debugging
+# nlmconv.c fork: verbose ld + clearer error messages, plus a fix for a genuine upstream bug in
+# i386_mangle_relocs - it resolved internal PC-relative relocs without the input section's
+# output_offset, so calls out of any code section placed at a nonzero offset (gcc's
+# .text.startup, where main lands) jumped output_offset bytes past their target at run time.
+# See docs/nlm-toolchain-notes.md.
 WORKDIR /Downloads/binutils-2.30/
 RUN ls -lh binutils/nlmconv.c
 COPY nlmconv.c binutils/
 RUN cat binutils/nlmconv.c | grep stderr
 
-# Comment out a check that causes nlmconv to fail with an Internal Error, apparently unnecessarily:
+# nlm32-i386.c fork: restores the "absolute internal relocs only" check (an earlier fork disabled
+# it, which let load-time-corrupting fixups through) and adds actionable error messages. The
+# legitimate triggers are fixed at their source instead: the nlmconv.c pcrel fix above and
+# -fno-asynchronous-unwind-tables in CFLAGS (gcc's .eh_frame carries PC32 relocs the NLM format
+# cannot represent).
 RUN ls /Downloads/binutils-2.30/bfd/nlm32-i386.c
 RUN rm /Downloads/binutils-2.30/bfd/nlm32-i386.c
 COPY bfd/nlm32-i386.c /Downloads/binutils-2.30/bfd/
 RUN ls /Downloads/binutils-2.30/bfd/nlm32-i386.c
+
+# Fail the build on malformed numbers in .def files (e.g. "STACK bladiebla") instead of exiting 0
+# with a silently-zeroed header field. The touch keeps the shipped bison-generated nlmheader.c
+# newer than the patched nlmheader.y, so make doesn't try to regenerate it (no bison here).
+COPY patches/ /Downloads/patches/
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install patch
+RUN patch --fuzz=0 -p1 -d /Downloads/binutils-2.30 < /Downloads/patches/0001-nlmheader-bad-number-is-an-error.patch \
+    && touch /Downloads/binutils-2.30/binutils/nlmheader.c
 
 WORKDIR /Downloads/binutils-2.30/
 # With thanks to https://soufianebouchaa.medium.com/how-to-compile-binutils-on-ubuntu-debian-ec268674b759
@@ -199,7 +217,9 @@ WORKDIR /Downloads/nlm-samples/hello
 RUN sed -i.bak "s/Hello world!/Well, hello there! (built at $(date))/g" hello.c
 # Force the compiler on 64-bit x86 OS to compile for 32-bit x86 architecture (i386)
 # The `-fno-pic` option is needed to ensure that we get a Global Offset Table, see https://stackoverflow.com/a/45422495
-RUN sed -i.bak 's/CFLAGS = /CFLAGS = -m32 -fno-pic /g' Makefile
+# `-fno-asynchronous-unwind-tables` suppresses gcc's .eh_frame, whose PC-relative relocs the NLM
+# format cannot represent (nlmconv rejects them; NetWare never reads .eh_frame anyway).
+RUN sed -i.bak 's/CFLAGS = /CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tables /g' Makefile
 # Enable debugging in nlmconv for troubleshooting weird `Invalid operation` error
 RUN sed -i.bak 's/nlmconv --output-target/nlmconv --debug --output-target/g' Makefile
 RUN mv hello.o hello_orig.o
@@ -300,7 +320,9 @@ WORKDIR /home/$USERNAME/Downloads/nlm-samples/hello
 RUN sed -i.bak "s/Hello world!/Well, hello there! (built at $(date))/g" hello.c
 # Force the compiler on 64-bit x86 OS to compile for 32-bit x86 architecture (i386)
 # The `-fno-pic` option is needed to ensure that we get a Global Offset Table, see https://stackoverflow.com/a/45422495
-RUN sed -i.bak 's/CFLAGS = /CFLAGS = -m32 -fno-pic /g' Makefile
+# `-fno-asynchronous-unwind-tables` suppresses gcc's .eh_frame, whose PC-relative relocs the NLM
+# format cannot represent (nlmconv rejects them; NetWare never reads .eh_frame anyway).
+RUN sed -i.bak 's/CFLAGS = /CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tables /g' Makefile
 # Enable debugging in nlmconv for troubleshooting weird `Invalid operation` error
 RUN sed -i.bak 's/nlmconv --output-target/nlmconv --debug --output-target/g' Makefile
 RUN mv hello.o hello_orig.o

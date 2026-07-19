@@ -46,7 +46,10 @@ build-boot-crash-reset cycle currently needed to debug the issue below.
 
 ## Known technical issues (in progress)
 
-Current blocker, logged at the bottom of [README.md](README.md): an `Invalid TSS Processor Exception`
-abend when the NLM attempts a graphics mode switch — suspected IOPL/ring-privilege issue, not yet
-resolved. [NOTES.md](NOTES.md) has an earlier, separate note on a GPPE triggered by video memory
-access, addressed by declaring the NLM a driver (`OS_DOMAIN` in `hello.def`).
+The 2025 abends (`Invalid TSS`, GPPE — logged in [README.md](README.md)/[NOTES.md](NOTES.md)) were
+most likely caused by a toolchain relocation bug that corrupted every cross-object call, fixed
+2026-07-19 in the Dockerfile's binutils patches but **not yet verified by booting on NetWare** —
+see [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md) for the mechanism, the mandatory
+`-fno-asynchronous-unwind-tables` CFLAGS rule, the disassembly-based verification recipe, and the
+re-baseline plan. The earlier IOPL/ring-privilege and `OS_DOMAIN`/`TYPE 9` theories are unconfirmed
+and should be re-tested from a clean baseline on the fixed toolchain.

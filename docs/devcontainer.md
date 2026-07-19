@@ -26,9 +26,17 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
 2. **`binutils-builder`** (`debian:9.13`, "Stretch") — the *only* stage on EOL Debian 9. Compiles
    binutils 2.30 with `--enable-targets=i386-netware --enable-obsolete` to get `nlmconv` and the
    `nlm32-i386` BFD target. This support was removed from binutils upstream after 2.31, and nothing
-   upstream tests these obsolete targets against modern GCC/glibc — even on this period-matched
-   toolchain, `nlmconv.c` and `bfd/nlm32-i386.c` need source patches (applied via `COPY` from
-   `.devcontainer/nlmconv.c` and `.devcontainer/bfd/nlm32-i386.c`) to build and behave correctly.
+   upstream tests these obsolete targets against modern GCC/glibc — the source is patched three
+   ways before building (full background: [nlm-toolchain-notes.md](nlm-toolchain-notes.md)):
+   - `COPY`-replaced forks `.devcontainer/nlmconv.c` (verbose ld, clearer errors, and a fix for an
+     upstream bug that mis-resolved internal PC-relative relocs from code sections at nonzero
+     output offsets — the likely cause of the 2025 run-time abends) and
+     `.devcontainer/bfd/nlm32-i386.c` (restores the "absolute internal relocs only" check that an
+     earlier fork had disabled, with actionable error messages).
+   - `.devcontainer/patches/0001-nlmheader-bad-number-is-an-error.patch`, applied with `patch(1)`,
+     makes malformed `.def` numbers (e.g. `STACK bladiebla`) fail the build instead of silently
+     writing 0 into the header. It patches both `nlmheader.y` and the shipped bison-generated
+     `nlmheader.c` (then `touch`es the `.c` so make doesn't invoke bison, which isn't installed).
    `RUN linux32 ./configure ...` fakes `uname -m` (via `config.guess`) during the *build-triple
    detection* step — this does not make the resulting `nlmconv`/`ld` 32-bit binaries; they're native
    x86_64 tools that happen to understand a 32-bit target object format, no different from any
@@ -44,10 +52,22 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    `/usr/local` (the binutils-builder output) via `COPY --from=binutils-builder`.
 4. **`dev-env`** (`debian:11.11`) — the actual devcontainer image. Copies the built artifacts
    (`/nlm_disk.img`, `/usr/local`, `/usr/nwsdk`, `/usr/bin/nlmimp`) from `builder`, installs
-   JetBrains dev-container prerequisites, creates the non-root `dev-container-user`, installs Claude
+   JetBrains dev-container prerequisites plus debugging/analysis CLI tools (python3, xxd, file,
+   bsdextrautils, qemu-utils, socat, jq, ripgrep, shellcheck, strace — installed with
+   `--no-install-recommends`; `qemu-system-x86` is deliberately absent, the QEMU VM itself is
+   planned as a sidecar container), creates the non-root `dev-container-user`, installs Claude
    Code natively (`curl -fsSL https://claude.ai/install.sh | bash` — not the npm-based devcontainer
    Feature, which left a root-owned leftover that broke auto-update permissions for a non-root user),
    and repeats the sample-NLM test build as the non-root user as a smoke test.
+
+## Upcoming: Debian 11 EOL (2026-08-31)
+
+The three non-Stretch stages run `debian:11.11` (bullseye), whose LTS security support ends
+**2026-08-31**. After that its apt repos move to `archive.debian.org` and every stage inherits the
+EOL-archive problems currently confined to `binutils-builder` — the "current Debian with clean apt
+repos" premise stated in comments stops holding. Plan: bump `downloader`/`builder`/`dev-env` to
+`debian:12` (or newer) before then, and re-verify the nlm-kit and sample-NLM builds afterwards
+(newer default gcc); only `binutils-builder` legitimately stays on Debian 9.
 
 ## apt caching pattern (every stage)
 

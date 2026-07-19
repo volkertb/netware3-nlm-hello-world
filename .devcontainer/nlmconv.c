@@ -1459,8 +1459,16 @@ i386_mangle_relocs (bfd *outbfd, asection *insec, arelent ***relocs_ptr,
 	{
 	  bfd_vma val;
 
+	  /* The symbol's value is already in output-section coordinates
+	     (see the sym->value += output_offset adjustment in main), so
+	     the PC we subtract must be too: rel->address, which had
+	     insec->output_offset added above - not the input-relative
+	     `address`.  Using `address` leaves the displacement short by
+	     output_offset for any input section placed at a nonzero
+	     offset (e.g. gcc's .text.startup, where main ends up),
+	     producing wild calls at run time.  */
 	  if (rel->howto->pcrel_offset)
-	    addend -= address;
+	    addend -= rel->address;
 
 	  val = bfd_get_32 (outbfd, (bfd_byte *) contents + address);
 	  val += addend;
