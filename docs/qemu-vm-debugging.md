@@ -4,15 +4,13 @@ Captured now so a future session doesn't have to re-derive these requirements fr
 
 ## Goal
 
-Functional testing of an NLM means booting NetWare and loading it — a manual VM round-trip per
-iteration today (the 2025 abend saga that originally motivated this took over a year partly
-because of that cycle time; it's resolved, but the cycle-time problem it exposed is permanent).
-The goal is a QEMU-based NetWare VM the agent can drive end-to-end without a human in the loop for
-each iteration — send keystrokes, read the screen, detect a crash/hang, reset automatically — while
-the human keeps a live view via VNC, for fast joint human+agent development. Decided since the
-original writeup: QEMU runs in a **sidecar container**, not in the dev container
-(`qemu-system-x86` is deliberately absent from the dev image; the dev container only needs
-python3/socat/jq for the QMP client side, already installed).
+Functional testing of an NLM means booting NetWare and loading it — today a manual VM round-trip
+per iteration (a cycle time that helped stretch the since-resolved 2025 abend saga to over a
+year). The goal: a QEMU-based NetWare VM the agent drives end-to-end — send keystrokes, read the
+screen, detect crash/hang, reset automatically — while the human keeps a live VNC view, for fast
+joint human+agent development. Decided: QEMU runs in a **sidecar container**, not in the dev
+container (`qemu-system-x86` is deliberately absent from the dev image; the QMP client side —
+python3/socat/jq — is already installed).
 
 ## Requirements (as stated by the user, 2026-07-19)
 
@@ -37,14 +35,10 @@ python3/socat/jq for the QMP client side, already installed).
 
 ## Existing groundwork already in place
 
-- `/dev/kvm` is already passed through in `devcontainer.json`'s `runArgs` for KVM acceleration —
-  unused until this lands. See [devcontainer.md](devcontainer.md).
+- `/dev/kvm` is already passed through in `devcontainer.json`'s `runArgs` — unused until this
+  lands ([devcontainer.md](devcontainer.md)).
 - `README.md` has links for manually installing/running NetWare 3.12 in a VM (VirtualBox-based) —
-  useful as an install/config reference even though the target here is QEMU, not VirtualBox.
-- `NOTES.md` has the dated debugging log of the (since-resolved) abend saga that motivated this;
-  [nlm-toolchain-notes.md](nlm-toolchain-notes.md) has the durable conclusions. The automated
-  reset-and-retry loop is for whatever the next such saga turns out to be.
-- The dev container already ships the QMP client side: python3, socat, jq.
+  useful as an install/config reference even though the target here is QEMU.
 - Worth doing in the NLM *before* building the automation: restore 80×25 text mode before exiting
   (e.g. `set_text_mode()` in `modes.c`, or reprogram the registers back). After a graphics-mode
   test the server only *looks* hung — the console keeps running and writing to the invisible text
