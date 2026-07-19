@@ -8,7 +8,7 @@ future changes but too long to keep in `AGENTS.md`.
 `.devcontainer/Dockerfile` is 4 stages, forming a DAG (each stage `COPY --from=` an earlier one;
 apt-installed packages do **not** carry across a `COPY` — only explicitly copied paths do):
 
-1. **`downloader-and-patcher`** (`debian:11.11`) — fetches all 4 large external downloads
+1. **`downloader-and-patcher`** (`debian:13.6`) — fetches all 4 large external downloads
    (binutils source, Novell NDK ISO, nlm-samples, nlm-kit) once into a
    `RUN --mount=type=cache,target=/downloads-cache` cache mount, copies them into `/Downloads` in
    the image, and also **extracts and patches the binutils source tree** (`/Downloads/binutils-2.30`).
@@ -46,17 +46,24 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    `RUN linux32 ./configure ...` fakes `uname -m` (via `config.guess`) during the *build-triple
    detection* step — this does not make the resulting `nlmconv`/`ld` 32-bit binaries; they're native
    x86_64 tools that happen to understand a 32-bit target object format, no different from any
-   cross-toolchain. (Confirmed empirically: `builder`'s `RUN nlmconv --version && ld -v` sanity check
-   succeeds immediately after copying `/usr/local` in, before `gcc-multilib`/any 32-bit runtime
-   support is installed in that stage — a real 32-bit ELF couldn't have executed at that point.)
+   cross-toolchain. (Confirmed empirically: `builder`'s `RUN nlmconv --version && i386-netware-ld -v`
+   sanity check succeeds immediately after copying `/usr/local` in, before `gcc-multilib`/any 32-bit
+   runtime support is installed in that stage — a real 32-bit ELF couldn't have executed at that point.)
    Debian 9's archived apt repo (`archive.debian.org`) is enough here because this stage only needs
    `build-essential` and `texinfo` — no `debian-security`-only packages.
-3. **`builder`** (`debian:11.11`) — everything else that used to require Debian 9 but doesn't:
+   - After `make install`, `/usr/local` is pruned to just `nlmconv`, `i386-netware-ld`, and
+     `i386-netware-objdump` (~140 MB of libs/headers/tooldir copies deleted). The renames are
+     load-bearing, not cosmetic: binutils 2.30 installs a full plain-named toolset, and gcc
+     resolves subprograms via PATH where `/usr/local/bin` wins — on Debian ≥ 12 (gcc ≥ 11,
+     DWARF 5 default) host compiles then die with `as: unrecognized option '--gdwarf-5'` because
+     gas 2.30 predates it. Cross-tool-style names can never be picked up by accident; nlmconv's
+     fork defaults `LD_NAME` to `i386-netware-ld`, so no Makefile changes were needed.
+3. **`builder`** (`debian:13.6`) — everything else that used to require Debian 9 but doesn't:
    extracts the NDK ISO, builds `nlm-kit` (which is what actually produces `/usr/bin/nlmimp` — it's
    *not* part of binutils, despite living in `/usr/bin`; easy to misattribute), and does a full test
    build of the sample `hello` NLM plus packages `/nlm_disk.img` via `mtools`. Receives
    `/usr/local` (the binutils-builder output) via `COPY --from=binutils-builder`.
-4. **`dev-env`** (`debian:11.11`) — the actual devcontainer image. Copies the built artifacts
+4. **`dev-env`** (`debian:13.6`) — the actual devcontainer image. Copies the built artifacts
    (`/nlm_disk.img`, `/usr/local`, `/usr/nwsdk`, `/usr/bin/nlmimp`) from `builder`, installs
    JetBrains dev-container prerequisites plus debugging/analysis CLI tools (python3, xxd, file,
    bsdextrautils, qemu-utils, socat, jq, ripgrep, shellcheck, strace — installed with
@@ -66,14 +73,15 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    Feature, which left a root-owned leftover that broke auto-update permissions for a non-root user),
    and repeats the sample-NLM test build as the non-root user as a smoke test.
 
-## Upcoming: Debian 11 EOL (2026-08-31)
+## Debian base images (bumped to 13.6 on 2026-07-19)
 
-The three non-Stretch stages run `debian:11.11` (bullseye), whose LTS security support ends
-**2026-08-31**. After that its apt repos move to `archive.debian.org` and every stage inherits the
-EOL-archive problems currently confined to `binutils-builder` — the "current Debian with clean apt
-repos" premise stated in comments stops holding. Plan: bump `downloader-and-patcher`/`builder`/`dev-env` to
-`debian:12` (or newer) before then, and re-verify the nlm-kit and sample-NLM builds afterwards
-(newer default gcc); only `binutils-builder` legitimately stays on Debian 9.
+The three non-Stretch stages run `debian:13.6` (trixie), bumped from `11.11` ahead of Debian 11's
+LTS end (**2026-08-31**), after which bullseye's apt repos move to `archive.debian.org` and every
+stage would have inherited the EOL-archive problems confined to `binutils-builder`. The bump's
+fallout — the binutils 2.30 install shadowing the host toolchain once gcc ≥ 11 became the host
+compiler — is covered in the `binutils-builder` stage notes above. Only `binutils-builder`
+legitimately stays on Debian 9; when Debian 13 itself ages out, expect the same class of exercise
+(and re-verify the nlm-kit and sample-NLM builds against the newer default gcc).
 
 ## apt caching pattern (every stage)
 

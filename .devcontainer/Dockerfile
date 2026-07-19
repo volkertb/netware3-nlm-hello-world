@@ -5,7 +5,7 @@
 # works with no EOL-archive workarounds needed. The binutils source is also extracted and patched
 # here, for the same reason: tar/xz/patch install trivially on a current Debian, keeping the EOL
 # Debian 9 stage below down to nothing but configure+make.
-FROM debian:11.11 AS downloader-and-patcher
+FROM debian:13.6 AS downloader-and-patcher
 
 ARG DOWNLOAD_BINUTILS_FILE_NAME=binutils-2.30.tar.xz
 ARG DOWNLOAD_BINUTILS_INTERNET_PATH=https://ftp.gnu.org/gnu/binutils/$DOWNLOAD_BINUTILS_FILE_NAME
@@ -134,18 +134,34 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN linux32 ./configure --prefix=/usr/local --enable-targets=i386-netware --enable-obsolete
 RUN make
 RUN make install
+# Prune the install down to what the NLM pipeline needs, under names that can never shadow the
+# host toolchain in later stages (first casualty was as: gcc >= 11 drives it with --gdwarf-5,
+# which gas 2.30 predates). nlmconv execs the renamed ld via its LD_NAME default (see the
+# nlmconv.c fork); the 2.30 objdump is kept, renamed, as the only objdump that can still read
+# nlm32-i386 - the verification recipe in docs/nlm-toolchain-notes.md needs it. Everything else
+# goes: ~140 MB of libs/headers/man pages, the i686-pc-linux-gnu tooldir copies, and every
+# host-shadowing binary (as, ar, strip, nm, ...).
+RUN cd /usr/local/bin \
+    && mv ld i386-netware-ld \
+    && mv objdump i386-netware-objdump \
+    && find . -maxdepth 1 -type f ! -name nlmconv ! -name i386-netware-ld ! -name i386-netware-objdump -delete \
+    && rm -rf /usr/local/share /usr/local/lib /usr/local/include /usr/local/etc /usr/local/man /usr/local/i686-pc-linux-gnu
 #RUN man nlmconv
 RUN nlmconv --version
-RUN ld -v
+RUN i386-netware-ld -v
+# Guard against the compiled-in linker default silently reverting to "ld" (the binutils Makefile
+# passes -DLD_NAME="ld"; the nlmconv.c fork must #undef it) - with the plain name, nlmconv would
+# exec the host ld two stages later and die on mixed elf32/elf64 relocatable linking.
+RUN grep -aq i386-netware-ld /usr/local/bin/nlmconv
 
 # A current Debian release with normal, non-archived apt repos - avoids the whole class of
 # archive.debian.org/EOL-dependency problems for everything that doesn't actually need Debian 9.
 # Old (Debian 9-compiled) binaries run fine on a newer glibc, so the nlmconv/ld built above just
 # gets copied in and used here as-is.
-FROM debian:11.11 AS builder
+FROM debian:13.6 AS builder
 
 COPY --from=binutils-builder /usr/local /usr/local
-RUN nlmconv --version && ld -v
+RUN nlmconv --version && i386-netware-ld -v
 
 # Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
 # baking them into image layers or re-downloading them every time. Debian images delete
@@ -237,7 +253,7 @@ RUN mcopy -i /nlm_disk.img *.nlm ::
 RUN mcopy -i /nlm_disk.img /usr/nwsdk/lib/smp/threads.nlm ::
 RUN mdir -i /nlm_disk.img ::
 
-FROM debian:11.11 AS dev-env
+FROM debian:13.6 AS dev-env
 
 ARG USERNAME=dev-container-user
 ARG USER_UID=1000

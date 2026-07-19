@@ -8,7 +8,7 @@ durable conclusions.
 ## The relocation bug (likely root cause of the 2025 abends)
 
 **Every multi-object NLM built between 2025-04-20 and 2026-07-19 contained a corrupted internal
-call.** Verified by disassembly (`objdump -d -j .text hello.nlm`): `main`'s call to `putTextChars`
+call.** Verified by disassembly (`i386-netware-objdump -d -j .text hello.nlm`): `main`'s call to `putTextChars`
 pointed at `main` itself — infinite recursion, one `delay(3000)` pause per loop, until the ring-0
 stack overflowed into adjacent memory. NetWare 3.x has no ring-0 guard pages, so the overflow
 trashes whatever lies below the stack and the abend flavor varies (GPPE, Invalid TSS with a
@@ -42,9 +42,17 @@ Mechanism, two layers deep:
 - Never disable checks in `nlm_i386_write_import`; if it errors, the input contains something the
   NLM format can't express — fix the input.
 - After any toolchain change, verify internal calls before booting: build, then
-  `objdump -d -j .text hello.nlm` and confirm cross-object `call` targets land on the callee
-  (compare against `nm` output of the `ld -Ur` intermediate; reproduce that intermediate with
-  `ld -Ur -o test.O hello.o vga_util.o /usr/nwsdk/lib/prelude.o && objdump -r test.O`).
+  `i386-netware-objdump -d -j .text hello.nlm` and confirm cross-object `call` targets land on
+  the callee (compare against `nm` output of the `ld -Ur` intermediate; reproduce that
+  intermediate with
+  `i386-netware-ld -Ur -o test.O hello.o vga_util.o /usr/nwsdk/lib/prelude.o && objdump -r test.O`).
+- Tool naming: the binutils-2.30 tools are installed as `i386-netware-ld` and
+  `i386-netware-objdump` (plus `nlmconv` itself) — cross-tool-style names so they can never
+  shadow the host toolchain (gas 2.30 shadowing the host `as` broke Debian 13 builds with
+  `--gdwarf-5`; see docs/devcontainer.md). `i386-netware-objdump` is the only objdump that still
+  reads `nlm32-i386` files — the host objdump cannot dump NLMs, only the ELF `.o`/`.O`
+  intermediates. nlmconv finds `i386-netware-ld` by itself (its fork's `LD_NAME` default, sibling
+  directory or PATH); no Makefile needs to pass `-l`.
 
 ## nlmconv `.def` parsing: bad numbers
 

@@ -2063,10 +2063,14 @@ powerpc_mangle_relocs (bfd *outbfd, asection *insec,
 
 #endif /* NLMCONV_POWERPC */
 
-/* Name of linker.  */
-#ifndef LD_NAME
-#define LD_NAME "ld"
-#endif
+/* Name of linker.  The #undef is required, not defensive: the binutils
+   Makefile compiles this file with -DLD_NAME="ld" (transformed), so an
+   #ifndef guard here would never fire.  The 2.30 ld is installed under a
+   cross-tool-style name so it can never shadow the host linker (see the
+   /usr/local pruning in the Dockerfile's binutils-builder stage); nlmconv
+   finds it next to its own binary, or on PATH.  */
+#undef LD_NAME
+#define LD_NAME "i386-netware-ld"
 
 /* The user has specified several input files.  Invoke the linker to
    link them all together, and convert and delete the resulting output
