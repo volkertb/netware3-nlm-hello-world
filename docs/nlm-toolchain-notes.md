@@ -5,7 +5,7 @@ in-container; read this before debugging NLM crashes or touching the binutils pa
 `.devcontainer/`. The live, dated debugging log is `NOTES.md` (untracked WIP); this file keeps the
 durable conclusions.
 
-## The relocation bug (likely root cause of the 2025 abends)
+## The relocation bug (root cause of the 2025 abends — confirmed)
 
 **Every multi-object NLM built between 2025-04-20 and 2026-07-19 contained a corrupted internal
 call.** Verified by disassembly (`i386-netware-objdump -d -j .text hello.nlm`): `main`'s call to `putTextChars`
@@ -13,10 +13,22 @@ pointed at `main` itself — infinite recursion, one `delay(3000)` pause per loo
 stack overflowed into adjacent memory. NetWare 3.x has no ring-0 guard pages, so the overflow
 trashes whatever lies below the stack and the abend flavor varies (GPPE, Invalid TSS with a
 garbage selector like `0000CCCC`). The GPPE "on video memory access" (NOTES.md 2025-06-07) and the
-Invalid TSS "on graphics mode switch" (README 2025-06-08) most likely were this one bug — the
-crash struck at the first cross-object call, which happened to be a vga_util function, so it
-*looked* like the video code was at fault. The IOPL/ring-privilege theory was never confirmed and
-should be considered unsupported until the fixed toolchain reproduces a failure.
+Invalid TSS "on graphics mode switch" (README 2025-06-08) were this one bug — the crash struck at
+the first cross-object call, which happened to be a vga_util function, so it *looked* like the
+video code was at fault.
+
+**Closure, 2026-07-19: fix confirmed by booting NetWare 3.12 in a VM.** Both NLMs load and run
+end-to-end: `hello.nlm` prints, writes the text buffer, exits cleanly; `helloold.nlm` additionally
+switches to 320×200 VGA graphics via direct register programming (`vgamode.c`) — the exact
+operation that used to abend
+([screenshot](images/netware312-vga-mode13h-2026-07-19.png); the pixel noise is leftover text-buffer
+data reinterpreted as pixels, i.e. the switch worked and nothing cleared VRAM). The IOPL/ring-privilege
+theory is dead: mode switching and port I/O work. Direct video memory access (`0xA0000`/`0xB8000`)
+and `inp`/`outp` all function from an NLM. A second boot the same day with `TYPE 0` and no
+`OS_DOMAIN` in `hello_old.def` behaved identically
+([screenshot](images/netware312-vga-mode13h-type0-no-osdomain-2026-07-19.png)), so **neither
+`TYPE 9` nor `OS_DOMAIN` is needed** for VGA register/memory access on 3.12 — plain `TYPE 0` NLMs
+have full hardware access.
 
 Mechanism, two layers deep:
 
@@ -99,36 +111,38 @@ nothing meaningful, whereas undersizing is catastrophic and hard to diagnose.
 The `.imp` files under `/usr/nwsdk/imports/` were generated from NetWare 4.11 NLMs, where CLIB was
 split (CLIB/THREADS/NLMLIB/…). `delay`, `inp`, `outp` therefore live in `threads.imp`, not
 `clib.imp`. A `.def` that imports only `@clib.imp` gets nlmconv warnings
-("symbol delay imported but not in import list") — nlmconv adds the imports anyway. On NetWare
-3.x, CLIB.NLM is monolithic; whether it exports these three at load time is confirmed or denied by
-the server's load screen (expected to work, unverified). Do not add `MODULE THREADS` for a 3.x
-target — there is no separate THREADS.NLM there.
+("symbol delay imported but not in import list") — nlmconv adds the imports anyway, and they are
+harmless: **confirmed 2026-07-19** — both NLMs import only `@clib.imp` and NetWare 3.12's
+monolithic CLIB.NLM resolved `delay`/`inp`/`outp` at load time. Do not add `MODULE THREADS` for a
+3.x target — there is no separate THREADS.NLM there.
 
 ## APIs that do not exist (checked against the whole SDK)
 
 - **`Int68` does not exist** — no header, no `.imp` mentions it (nor `int86` or any
   real-mode-interrupt helper). It originated in an LLM (Gemini) suggestion and only ever compiled
-  as an implicit declaration; it would be an unresolved import at load time. The graphics-mode
-  switch needs a different mechanism (e.g. direct VGA register programming via `outp`, cf.
-  `modes.c`).
+  as an implicit declaration; it would be an unresolved import at load time. Direct VGA register
+  programming via `outp` is the working mechanism (`vgamode.c`'s `init_graph_vga`, confirmed on
+  NetWare 3.12).
 - `inp`/`outp`/`delay` have no SDK header declarations either (hence `implicit_nlm_defs.h`); they
   resolve at load time as imports.
 
-## Open questions (unverified — do not state as fact)
+## `TYPE 9` / `OS_DOMAIN`: not needed (resolved 2026-07-19, second boot test)
 
-- `TYPE 9` in `hello.def` ("Custom device module", a NetWare 4.1x NWPA concept) vs `TYPE 0` on a
-  3.11/3.12 target: unknown whether the 3.x loader honors, ignores, or misparses type 9, and CDMs
-  conventionally use a `.cdm` extension. The GPPE-on-video-memory fix attributed to "declaring the
-  NLM a driver" conflates `TYPE` (module kind) with `OS_DOMAIN` (ring/domain flag); which one (if
-  either) actually mattered was never isolated — and the reloc bug above may have been the real
-  variable all along.
-- Whether `OS_DOMAIN` has any effect on NetWare 3.x (domains were primarily a 4.x feature) is
-  unverified.
+`hello_old.def` with `TYPE 0` and `OS_DOMAIN` commented out loads and switches to graphics mode
+exactly as before — so neither setting is needed for hardware access, and both were dead weight
+from the 2025 misdiagnosis (the reloc bug was the real variable all along). Use `TYPE 0` for
+ordinary NLMs. On why `OS_DOMAIN` made no difference: NetWare 3.x runs every NLM in ring 0 in a
+single unprotected address space; protected domains (ring-3 loading via DOMAIN.NLM, which the
+`OS_DOMAIN` header flag opts out of) are a NetWare 4.x feature, so on 3.x the flag has nothing to
+opt out of and is presumably ignored by the loader. (Inference from feature history plus the
+identical observed behavior — not verified against Novell loader documentation; it doesn't
+matter in practice now.)
 
-## Re-baseline plan for the next NetWare boot (after the 2026-07-19 toolchain fixes)
+## Re-baseline (completed 2026-07-19)
 
-1. Set a real `STACK` value in `hello.def`, rebuild everything with the rebuilt toolchain, and
-   confirm via disassembly that internal calls are correct.
-2. Boot the plain hello + `putTextChars` NLM *without* touching `TYPE`/`OS_DOMAIN` — expectation:
-   the old GPPE/TSS abends do not reproduce.
-3. Only then reintroduce the graphics-mode work, one variable at a time.
+The post-fix re-baseline plan was executed the same day: real `STACK` values set, everything
+rebuilt on the fixed toolchain, `verify-nlm` clean, and both NLMs boot-tested on NetWare 3.12 —
+no abends, graphics mode switch works, and the `TYPE 9`/`OS_DOMAIN` variable was isolated the
+same day (see above: not needed). Nothing from the 2025 saga remains open. Future regressions
+should be caught by `verify-nlm` at build time; anything that passes it but still misbehaves on
+NetWare is, by construction, not the 2025 relocation-corruption class.

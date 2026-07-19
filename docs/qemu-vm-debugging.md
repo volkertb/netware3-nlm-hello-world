@@ -4,16 +4,21 @@ Captured now so a future session doesn't have to re-derive these requirements fr
 
 ## Goal
 
-The current hard blocker (see [NOTES.md](../NOTES.md) — `Invalid TSS Processor Exception`) needs many
-build-boot-crash-reset cycles to debug, and resetting a VM by hand after every crash/hang is slow.
+Functional testing of an NLM means booting NetWare and loading it — a manual VM round-trip per
+iteration today (the 2025 abend saga that originally motivated this took over a year partly
+because of that cycle time; it's resolved, but the cycle-time problem it exposed is permanent).
 The goal is a QEMU-based NetWare VM the agent can drive end-to-end without a human in the loop for
 each iteration — send keystrokes, read the screen, detect a crash/hang, reset automatically — while
-the human keeps a live view via VNC.
+the human keeps a live view via VNC, for fast joint human+agent development. Decided since the
+original writeup: QEMU runs in a **sidecar container**, not in the dev container
+(`qemu-system-x86` is deliberately absent from the dev image; the dev container only needs
+python3/socat/jq for the QMP client side, already installed).
 
 ## Requirements (as stated by the user, 2026-07-19)
 
-- A QEMU instance running a NetWare 3.x VM, spun up alongside the devcontainer (in-container or
-  sidecar — undecided; see "Other `devcontainer.json` settings" in [devcontainer.md](devcontainer.md)).
+- A QEMU instance running a NetWare 3.x VM, spun up alongside the devcontainer as a sidecar
+  container (decided; see "Other `devcontainer.json` settings" in [devcontainer.md](devcontainer.md)
+  — the `/dev/kvm` `runArgs` passthrough should move to the sidecar's config when it lands).
 - VNC access for the human — not just passive viewing: full interactive keyboard/mouse control of
   the VM, usable concurrently with the agent's own control channel below, so the human can drive the
   VM directly or intervene mid-session (e.g. to take over during a stuck debugging loop) without
@@ -36,8 +41,10 @@ the human keeps a live view via VNC.
   unused until this lands. See [devcontainer.md](devcontainer.md).
 - `README.md` has links for manually installing/running NetWare 3.12 in a VM (VirtualBox-based) —
   useful as an install/config reference even though the target here is QEMU, not VirtualBox.
-- `NOTES.md` has the live debugging log for the bug motivating this (a suspected IOPL/ring-0 issue
-  on graphics mode switch) — this is specifically what the automated reset-and-retry loop is for.
+- `NOTES.md` has the dated debugging log of the (since-resolved) abend saga that motivated this;
+  [nlm-toolchain-notes.md](nlm-toolchain-notes.md) has the durable conclusions. The automated
+  reset-and-retry loop is for whatever the next such saga turns out to be.
+- The dev container already ships the QMP client side: python3, socat, jq.
 
 ## Starting point for research
 

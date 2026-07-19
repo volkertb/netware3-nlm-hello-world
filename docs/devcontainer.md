@@ -29,7 +29,7 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
      [nlm-toolchain-notes.md](nlm-toolchain-notes.md)): `COPY`-replaced forks
      `.devcontainer/nlmconv.c` (verbose ld, clearer errors, and a fix for an upstream bug that
      mis-resolved internal PC-relative relocs from code sections at nonzero output offsets — the
-     likely cause of the 2025 run-time abends) and `.devcontainer/bfd/nlm32-i386.c` (restores the
+     confirmed cause of the 2025 run-time abends) and `.devcontainer/bfd/nlm32-i386.c` (restores the
      "absolute internal relocs only" check that an earlier fork had disabled, with actionable
      error messages); plus `.devcontainer/patches/0001-nlmheader-bad-number-is-an-error.patch`,
      applied with `patch(1)`, which makes malformed `.def` numbers (e.g. `STACK bladiebla`) fail
@@ -155,13 +155,15 @@ discarding it.
 - `containerUser: "dev-container-user"` silences a "user was not specified" error at the end of the
   JetBrains/Podman container image build; it must match the `USER` the Dockerfile actually switches
   to (or be `"root"` if the Dockerfile sets no explicit `USER`).
-- `runArgs: ["--device=/dev/kvm"]` passes the host's KVM device through so a QEMU instance could use
+- `runArgs: ["--device=/dev/kvm"]` passes the host's KVM device through so a QEMU instance can use
   KVM acceleration to emulate a NetWare 3.x machine for end-to-end testing (booting `floppy.img` for
-  real, rather than just confirming a clean `make`). No QEMU setup exists in this repo yet — this is
-  forward-looking, not dead config — either running QEMU inside this container or in a sidecar this
-  container talks to are both viable and undecided. Needs `/dev/kvm` to already be host-accessible
-  (mode 0666 here via systemd's default udev rule); a host where it's `kvm`-group-locked instead
-  would additionally need Podman's `--group-add=keep-groups`.
+  real, rather than just trusting `make` + `verify-nlm`). No QEMU setup exists in this repo yet —
+  this is forward-looking, not dead config. Decided: QEMU will run in a **sidecar container**
+  ([qemu-vm-debugging.md](qemu-vm-debugging.md)), so when that lands this passthrough should move
+  to the sidecar's run config and can be dropped here (removing the "dev container won't start on
+  KVM-less hosts" side effect). Needs `/dev/kvm` to already be host-accessible (mode 0666 here via
+  systemd's default udev rule); a host where it's `kvm`-group-locked instead would additionally
+  need Podman's `--group-add=keep-groups`.
 
 ## `~/.local/bin` on `PATH`
 
