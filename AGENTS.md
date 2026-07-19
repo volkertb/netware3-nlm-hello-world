@@ -38,6 +38,10 @@ access for the human and a QMP control channel for the agent (keyboard input, sc
 crash/hang auto-recovery), replacing the manual build-boot-reset cycle with a fast joint
 human+agent development loop.
 
+After that: [docs/ndk-independence.md](docs/ndk-independence.md) — plan for removing the
+proprietary Novell NDK from the build (its real surface is one 892-byte glue object and one
+prototype) and growing a picolibc-based, license-clean runtime for low-level/game NLM development.
+
 ## Rules
 
 - IMPORTANT: never name a specific coding agent in a committed `.devcontainer/` file. Agent-specific
