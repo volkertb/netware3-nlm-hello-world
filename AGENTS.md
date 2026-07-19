@@ -20,10 +20,12 @@ Original author and primary human maintainer: Volkert de Buisonjé.
 
 Full details, stage-by-stage rationale, and troubleshooting history: [docs/devcontainer.md](docs/devcontainer.md).
 
-Quick summary: `.devcontainer/Dockerfile` is a 4-stage build (`downloader` → `binutils-builder` →
-`builder` → `dev-env`). Only `binutils-builder` uses EOL Debian 9 — required because binutils 2.30's
-obsolete `nlm32-i386`/`i386-netware` target support won't build cleanly on newer toolchains, and
-upstream removed that target support entirely after 2.31. Everything else runs on current Debian.
+Quick summary: `.devcontainer/Dockerfile` is a 4-stage build (`downloader-and-patcher` →
+`binutils-builder` → `builder` → `dev-env`). Only `binutils-builder` uses EOL Debian 9, and it is
+kept to the bare minimum (configure+make of binutils) — required because binutils 2.30's obsolete
+`nlm32-i386`/`i386-netware` target support won't build cleanly on newer toolchains, and upstream
+removed that target support entirely after 2.31. Downloads and binutils source patching happen in
+`downloader-and-patcher`; everything else runs on current Debian.
 
 ## Planned work
 

@@ -2,8 +2,10 @@
 
 # All large downloads fetched once, up front, into a cache mount and reused across builds by
 # every later stage that needs one - a current Debian release with clean apt repos, so wget just
-# works with no EOL-archive workarounds needed.
-FROM debian:11.11 AS downloader
+# works with no EOL-archive workarounds needed. The binutils source is also extracted and patched
+# here, for the same reason: tar/xz/patch install trivially on a current Debian, keeping the EOL
+# Debian 9 stage below down to nothing but configure+make.
+FROM debian:11.11 AS downloader-and-patcher
 
 ARG DOWNLOAD_BINUTILS_FILE_NAME=binutils-2.30.tar.xz
 ARG DOWNLOAD_BINUTILS_INTERNET_PATH=https://ftp.gnu.org/gnu/binutils/$DOWNLOAD_BINUTILS_FILE_NAME
@@ -30,7 +32,7 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt -y update \
-    && apt -y install wget ca-certificates
+    && apt -y install wget ca-certificates xz-utils patch
 
 RUN mkdir -p /Downloads
 
@@ -62,18 +64,43 @@ RUN --mount=type=cache,target=/downloads-cache \
     && echo "$DOWNLOAD_NLM_KIT_SHA256  /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME" | sha256sum -c - \
     && cp /downloads-cache/$DOWNLOAD_NLM_KIT_FILE_NAME /Downloads/
 
+WORKDIR /Downloads
+RUN tar xf binutils-2.30.tar.xz
+
+# nlmconv.c fork: verbose ld + clearer error messages, plus a fix for a genuine upstream bug in
+# i386_mangle_relocs - it resolved internal PC-relative relocs without the input section's
+# output_offset, so calls out of any code section placed at a nonzero offset (gcc's
+# .text.startup, where main lands) jumped output_offset bytes past their target at run time.
+# See docs/nlm-toolchain-notes.md.
+COPY nlmconv.c binutils-2.30/binutils/
+
+# nlm32-i386.c fork: restores the "absolute internal relocs only" check (an earlier fork disabled
+# it, which let load-time-corrupting fixups through) and adds actionable error messages. The
+# legitimate triggers are fixed at their source instead: the nlmconv.c pcrel fix above and
+# -fno-asynchronous-unwind-tables in CFLAGS (gcc's .eh_frame carries PC32 relocs the NLM format
+# cannot represent).
+COPY bfd/nlm32-i386.c binutils-2.30/bfd/
+
+# Fail the build on malformed numbers in .def files (e.g. "STACK bladiebla") instead of exiting 0
+# with a silently-zeroed header field. The touch keeps the shipped bison-generated nlmheader.c
+# newer than the patched nlmheader.y, so make doesn't try to regenerate it (bison is installed
+# nowhere in this Dockerfile).
+COPY patches/ /Downloads/patches/
+RUN patch --fuzz=0 -p1 -d /Downloads/binutils-2.30 < /Downloads/patches/0001-nlmheader-bad-number-is-an-error.patch \
+    && touch /Downloads/binutils-2.30/binutils/nlmheader.c
+
 # Debian 9 (Stretch) is the last Debian release that has a binutils lower than version 2.31, but no nlmconv by default.
 # GNU ld (GNU Binutils for Debian) 2.28
 #
 # Compiling binutils 2.30's obsolete NLM target support needs an old-enough toolchain - nothing
-# upstream tests --enable-obsolete targets like nlm32-i386 against newer GCC/glibc, and even here
-# (a period-matched toolchain) the source needs patching below to build and work correctly. Only
-# the binutils build itself needs Debian 9, so this stage is kept to just that: everything else
-# that used to happen alongside it runs in the "builder" stage below instead, on a current Debian
-# release with working, non-archived apt repos.
+# upstream tests --enable-obsolete targets like nlm32-i386 against newer GCC/glibc. Only the
+# compile itself needs Debian 9, so this stage is kept to exactly that: the source arrives here
+# already extracted and patched (see downloader-and-patcher above), and everything else that used
+# to happen alongside runs in the "builder" stage below, on a current Debian release with
+# working, non-archived apt repos.
 FROM debian:9.13 AS binutils-builder
 
-COPY --from=downloader /Downloads/binutils-2.30.tar.xz /Downloads/
+COPY --from=downloader-and-patcher /Downloads/binutils-2.30 /Downloads/binutils-2.30
 
 # With thanks to https://unix.stackexchange.com/a/743863
 RUN echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
@@ -88,41 +115,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt -y update
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt -y install xz-utils
-WORKDIR /Downloads
-RUN tar xf binutils-2.30.tar.xz
-
-# nlmconv.c fork: verbose ld + clearer error messages, plus a fix for a genuine upstream bug in
-# i386_mangle_relocs - it resolved internal PC-relative relocs without the input section's
-# output_offset, so calls out of any code section placed at a nonzero offset (gcc's
-# .text.startup, where main lands) jumped output_offset bytes past their target at run time.
-# See docs/nlm-toolchain-notes.md.
-WORKDIR /Downloads/binutils-2.30/
-RUN ls -lh binutils/nlmconv.c
-COPY nlmconv.c binutils/
-RUN cat binutils/nlmconv.c | grep stderr
-
-# nlm32-i386.c fork: restores the "absolute internal relocs only" check (an earlier fork disabled
-# it, which let load-time-corrupting fixups through) and adds actionable error messages. The
-# legitimate triggers are fixed at their source instead: the nlmconv.c pcrel fix above and
-# -fno-asynchronous-unwind-tables in CFLAGS (gcc's .eh_frame carries PC32 relocs the NLM format
-# cannot represent).
-RUN ls /Downloads/binutils-2.30/bfd/nlm32-i386.c
-RUN rm /Downloads/binutils-2.30/bfd/nlm32-i386.c
-COPY bfd/nlm32-i386.c /Downloads/binutils-2.30/bfd/
-RUN ls /Downloads/binutils-2.30/bfd/nlm32-i386.c
-
-# Fail the build on malformed numbers in .def files (e.g. "STACK bladiebla") instead of exiting 0
-# with a silently-zeroed header field. The touch keeps the shipped bison-generated nlmheader.c
-# newer than the patched nlmheader.y, so make doesn't try to regenerate it (no bison here).
-COPY patches/ /Downloads/patches/
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt -y install patch
-RUN patch --fuzz=0 -p1 -d /Downloads/binutils-2.30 < /Downloads/patches/0001-nlmheader-bad-number-is-an-error.patch \
-    && touch /Downloads/binutils-2.30/binutils/nlmheader.c
+# Re-assert the patched bison output as newer than nlmheader.y, in case COPY --from did not
+# preserve the source stage's relative mtimes - if make decides to regenerate it, the build
+# fails on the missing bison.
+RUN touch /Downloads/binutils-2.30/binutils/nlmheader.c
 
 WORKDIR /Downloads/binutils-2.30/
 # With thanks to https://soufianebouchaa.medium.com/how-to-compile-binutils-on-ubuntu-debian-ec268674b759
@@ -162,9 +158,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt -y update
 
 RUN mkdir -p /Downloads
-COPY --from=downloader /Downloads/NOVSDKCD_4.iso /Downloads/
-COPY --from=downloader /Downloads/nlm-samples.tar.bz2 /Downloads/
-COPY --from=downloader /Downloads/nlm-kit-0.1.tar.bz2 /Downloads/
+COPY --from=downloader-and-patcher /Downloads/NOVSDKCD_4.iso /Downloads/
+COPY --from=downloader-and-patcher /Downloads/nlm-samples.tar.bz2 /Downloads/
+COPY --from=downloader-and-patcher /Downloads/nlm-kit-0.1.tar.bz2 /Downloads/
 
 WORKDIR /Downloads
 

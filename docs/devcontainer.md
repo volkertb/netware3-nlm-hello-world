@@ -8,13 +8,15 @@ future changes but too long to keep in `AGENTS.md`.
 `.devcontainer/Dockerfile` is 4 stages, forming a DAG (each stage `COPY --from=` an earlier one;
 apt-installed packages do **not** carry across a `COPY` — only explicitly copied paths do):
 
-1. **`downloader`** (`debian:11.11`) — fetches all 4 large external downloads (binutils source,
-   Novell NDK ISO, nlm-samples, nlm-kit) once into a `RUN --mount=type=cache,target=/downloads-cache`
-   cache mount, and copies them into `/Downloads` in the image. Every later stage that needs one of
-   these files does `COPY --from=downloader /Downloads/<file> ...` instead of downloading it again.
-   Consolidated here (rather than duplicated per-stage) specifically so the binutils download,
-   needed only by `binutils-builder`, could also be cached without installing `wget`/`ca-certificates`
-   a second time on Debian 9.
+1. **`downloader-and-patcher`** (`debian:11.11`) — fetches all 4 large external downloads
+   (binutils source, Novell NDK ISO, nlm-samples, nlm-kit) once into a
+   `RUN --mount=type=cache,target=/downloads-cache` cache mount, copies them into `/Downloads` in
+   the image, and also **extracts and patches the binutils source tree** (`/Downloads/binutils-2.30`).
+   Every later stage that needs one of these does `COPY --from=downloader-and-patcher ...` instead
+   of downloading/preparing it again. Consolidated here (rather than duplicated per-stage)
+   specifically so downloading *and* source preparation happen on a current Debian where
+   `wget`/`ca-certificates`/`tar`/`xz-utils`/`patch` install trivially — the EOL Debian 9 stage
+   below is left with nothing but configure+make.
    - Each download is gated by a self-healing checksum check:
      `[ -f cached ] && sha256sum --status -c - || wget ... && sha256sum -c - && cp ...`. Because `&&`
      and `||` in POSIX shell are left-to-right, equal precedence, this redownloads automatically if
@@ -23,20 +25,24 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    - This uses `RUN --mount=type=cache` + `wget` rather than Dockerfile's built-in
      `ADD --checksum=`, because `ADD` doesn't support `--mount` at all — there'd be no way to cache
      the download itself, only re-fetch it (or bake it into a layer) on every build.
-2. **`binutils-builder`** (`debian:9.13`, "Stretch") — the *only* stage on EOL Debian 9. Compiles
-   binutils 2.30 with `--enable-targets=i386-netware --enable-obsolete` to get `nlmconv` and the
-   `nlm32-i386` BFD target. This support was removed from binutils upstream after 2.31, and nothing
-   upstream tests these obsolete targets against modern GCC/glibc — the source is patched three
-   ways before building (full background: [nlm-toolchain-notes.md](nlm-toolchain-notes.md)):
-   - `COPY`-replaced forks `.devcontainer/nlmconv.c` (verbose ld, clearer errors, and a fix for an
-     upstream bug that mis-resolved internal PC-relative relocs from code sections at nonzero
-     output offsets — the likely cause of the 2025 run-time abends) and
-     `.devcontainer/bfd/nlm32-i386.c` (restores the "absolute internal relocs only" check that an
-     earlier fork had disabled, with actionable error messages).
-   - `.devcontainer/patches/0001-nlmheader-bad-number-is-an-error.patch`, applied with `patch(1)`,
-     makes malformed `.def` numbers (e.g. `STACK bladiebla`) fail the build instead of silently
-     writing 0 into the header. It patches both `nlmheader.y` and the shipped bison-generated
-     `nlmheader.c` (then `touch`es the `.c` so make doesn't invoke bison, which isn't installed).
+   - The binutils source is patched three ways before building (full background:
+     [nlm-toolchain-notes.md](nlm-toolchain-notes.md)): `COPY`-replaced forks
+     `.devcontainer/nlmconv.c` (verbose ld, clearer errors, and a fix for an upstream bug that
+     mis-resolved internal PC-relative relocs from code sections at nonzero output offsets — the
+     likely cause of the 2025 run-time abends) and `.devcontainer/bfd/nlm32-i386.c` (restores the
+     "absolute internal relocs only" check that an earlier fork had disabled, with actionable
+     error messages); plus `.devcontainer/patches/0001-nlmheader-bad-number-is-an-error.patch`,
+     applied with `patch(1)`, which makes malformed `.def` numbers (e.g. `STACK bladiebla`) fail
+     the build instead of silently writing 0 into the header. That patch covers both `nlmheader.y`
+     and the shipped bison-generated `nlmheader.c`, and the `.c` is `touch`ed (again defensively in
+     `binutils-builder` after the `COPY --from`, in case relative mtimes aren't preserved) so make
+     never tries to invoke bison, which is installed nowhere in the Dockerfile.
+2. **`binutils-builder`** (`debian:9.13`, "Stretch") — the *only* stage on EOL Debian 9, and kept
+   to the bare minimum that actually needs it: configure+make of binutils 2.30 with
+   `--enable-targets=i386-netware --enable-obsolete` to get `nlmconv` and the `nlm32-i386` BFD
+   target. This support was removed from binutils upstream after 2.31, and nothing upstream tests
+   these obsolete targets against modern GCC/glibc, hence the old-enough (period-matched)
+   toolchain. The source arrives already extracted and patched via `COPY --from=downloader-and-patcher`.
    `RUN linux32 ./configure ...` fakes `uname -m` (via `config.guess`) during the *build-triple
    detection* step — this does not make the resulting `nlmconv`/`ld` 32-bit binaries; they're native
    x86_64 tools that happen to understand a 32-bit target object format, no different from any
@@ -44,7 +50,7 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    succeeds immediately after copying `/usr/local` in, before `gcc-multilib`/any 32-bit runtime
    support is installed in that stage — a real 32-bit ELF couldn't have executed at that point.)
    Debian 9's archived apt repo (`archive.debian.org`) is enough here because this stage only needs
-   `xz-utils`, `build-essential`, and `texinfo` — no `debian-security`-only packages.
+   `build-essential` and `texinfo` — no `debian-security`-only packages.
 3. **`builder`** (`debian:11.11`) — everything else that used to require Debian 9 but doesn't:
    extracts the NDK ISO, builds `nlm-kit` (which is what actually produces `/usr/bin/nlmimp` — it's
    *not* part of binutils, despite living in `/usr/bin`; easy to misattribute), and does a full test
@@ -65,7 +71,7 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
 The three non-Stretch stages run `debian:11.11` (bullseye), whose LTS security support ends
 **2026-08-31**. After that its apt repos move to `archive.debian.org` and every stage inherits the
 EOL-archive problems currently confined to `binutils-builder` — the "current Debian with clean apt
-repos" premise stated in comments stops holding. Plan: bump `downloader`/`builder`/`dev-env` to
+repos" premise stated in comments stops holding. Plan: bump `downloader-and-patcher`/`builder`/`dev-env` to
 `debian:12` (or newer) before then, and re-verify the nlm-kit and sample-NLM builds afterwards
 (newer default gcc); only `binutils-builder` legitimately stays on Debian 9.
 
@@ -92,8 +98,15 @@ don't assume otherwise without checking a primary source, an earlier AI-generate
 the opposite incorrectly.
 
 Forgetting the `keep-cache` step in any *new* apt-using stage is an easy mistake to reintroduce (it's
-happened twice already, in `downloader` and `binutils-builder`, during the stage split) — check for
-it whenever adding a stage.
+happened twice already, in the downloader stage and `binutils-builder`, during the stage split) —
+check for it whenever adding a stage.
+
+A related trap (hit 2026-07-19, "Unable to locate package patch"): appending a new
+`apt -y install` layer to an already-built stage does **not** re-run that stage's earlier
+`apt -y update` layer — it's a layer-cache hit — while the `/var/lib/apt` cache mount it once
+populated may have been pruned since. The new layer then sees empty package lists. When adding an
+install to an *existing* stage, either put `apt -y update &&` in the same `RUN` (the pattern the
+`downloader-and-patcher` stage uses) or expect to bust the stage's layer cache.
 
 For troubleshooting a stale/corrupt cache directly on the host: under rootless Podman, `--mount=type=cache`
 data lives at `${TMPDIR:-/var/tmp}/buildah-cache-<uid>` on whichever machine actually runs
@@ -105,7 +118,7 @@ just the apt ones.
 Debian 9 is EOL and archived at `archive.debian.org`. Note `binutils-builder`'s `sources.list` is
 deliberately just the plain archive main/contrib/non-free line — it does *not* need the
 `debian-security` suite or `Acquire::Check-Valid-Until "false"` override, because it only ever
-installs `xz-utils`/`build-essential`/`texinfo`, none of which happened to hit an unresolvable
+installs `build-essential`/`texinfo`, none of which happened to hit an unresolvable
 point-release-pinned transitive dependency. If a future change adds a package here that does hit that
 class of failure (seen previously with `curl`→`libcurl3` and `wget`→`libgnutls30` in the old,
 single-stage Dockerfile), the fix is adding the `debian-security stretch/updates` suite line plus the
