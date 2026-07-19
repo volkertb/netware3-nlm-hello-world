@@ -61,7 +61,22 @@ Related facts:
 - Omitting `STACK` entirely also yields 0 — nlmconv applies no default. All historical builds of
   this project shipped stack size 0 and NetWare 3.12 loaded and ran them anyway, so the loader
   evidently tolerates it (own minimum, or CLIB threads bring their own stacks — unverified which).
-  Still, set a real value (e.g. `STACK 32768`) rather than relying on that.
+  Still, set a real value rather than relying on that.
+
+### Sizing `STACK`
+
+`STACK` sizes only the stack — heap allocations (`malloc`/`Alloc`) come from NetWare's memory
+pools at runtime, and globals live in `.data`/`.bss`, so an application's overall RAM footprint
+(even megabytes) does not go through this number. What does: the deepest call chain's stack
+frames, dominated by any large on-stack buffers/arrays.
+
+Size it generously: NetWare 3.x ring-0 stacks have no guard pages, so overflow silently corrupts
+adjacent memory and produces delayed, misleading abends (exactly the failure class of the 2025
+debugging saga). `hello.def` uses `STACK 131072` (128 KiB) — far above the CLIB-era 8–16 KiB
+defaults, ample for deep call chains and large locals even in a fairly big (1–4 MB working set)
+application, and negligible on a machine with megabytes of RAM. Bump it further if code ever
+puts big scratch buffers on the stack (e.g. a 64 KiB buffer as a local); going to 256 KiB costs
+nothing meaningful, whereas undersizing is catastrophic and hard to diagnose.
 
 ## Imports: this SDK is NetWare 4.11-vintage, the target is 3.x
 
