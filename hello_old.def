@@ -1,19 +1,18 @@
 #
-# hello.def - NLM Header definition file for nlmconv(1)
+# hello_old.def - NLM Header definition file for nlmconv(1)
 # Copyright (c) 2000 Martin Hinner <martin@hinner.info>
 #
 
 # define startup object files
-INPUT   hello.o
-INPUT   vga_util.o
+INPUT   hello_old.o
 INPUT   /usr/nwsdk/lib/prelude.o            # clib startup code
 
 # all imported functions and import lists
 IMPORT @/usr/nwsdk/imports/clib.imp         # Functions in CLIB.NLM
 
 # NLM header...
-OUTPUT  hello.nlm                           # output file
-TYPE 9                                      # 0 is Ordinary NLM (9 is Custom device module NLM)
+OUTPUT  hello_old.nlm                           # output file
+TYPE 0                                      # 0 is Ordinary NLM (9 is Custom device module NLM)
 VERSION 1,0,0                               # Version 1.0
 COPYRIGHT "Copyright (c) 2000 Martin Hinner <martin@hinner.info>" # (c) ...
 DESCRIPTION "Simple 'Hello world' NLM module." # title of nlm
