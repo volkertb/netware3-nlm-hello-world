@@ -3,3 +3,7 @@
 *.nlm
 *.o
 .devcontainer/postCreate.local.sh
+.claude/
+.claude-rebuild-backup*/
+.devcontainer/download_cache/
+.vscode/
