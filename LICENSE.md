@@ -24,3 +24,16 @@ From the `README`:
 ## Dockerfile
 
 Copyright 2025, Volkert de Buisonjé, released under the Apache License 2.0.
+
+## NLM sources in the repo root (hello.c, hello_old.c, *.def, Makefile)
+
+Derived from Martin Hinner's nlm-samples "hello" (LGPLv2, see above), substantially modified by
+Volkert de Buisonjé.
+
+## VGA mode-setting code (vgamode.c, nlm_io_wrapper.c, putpixel in hello_old.c)
+
+Copied/adapted from osdev.org forum posts and the OSDev wiki's "Drawing In a Linear Framebuffer"
+page; exact source URLs are kept in the file headers. The forum posts state no explicit license,
+so treat these files as attribution-only reference code rather than clearly-licensed. If license
+clarity ever matters, equivalent register-programming code exists in Chris Giese's explicitly
+public-domain modes.c (mirror link in README.md), which these could be rebased onto.
