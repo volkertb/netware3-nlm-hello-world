@@ -268,6 +268,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt -y install libicu-dev
 
+# Debugging/analysis helpers: binary inspection (xxd, file; bsdextrautils for hexdump -e's
+# custom format strings, e.g. extracting single NLM header fields), VM disk-image work (qemu-utils),
+# QMP scripting against the planned QEMU sidecar (python3, socat, jq — see docs/qemu-vm-debugging.md),
+# faster searching and script/syscall troubleshooting (ripgrep, shellcheck, strace).
+# --no-install-recommends because qemu-utils otherwise pulls in desktop-oriented Recommends.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install --no-install-recommends python3 xxd file bsdextrautils qemu-utils socat jq ripgrep shellcheck strace
+
 # Copy the NLM samples from the builder stage and make them available to the non-root user for the test build below
 COPY --from=builder /Downloads/nlm-samples /home/$USERNAME/Downloads/nlm-samples
 RUN chown -R $USERNAME /home/$USERNAME/Downloads/nlm-samples
