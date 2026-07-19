@@ -264,6 +264,12 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /usr/nwsdk /usr/nwsdk
 COPY --from=builder /usr/bin/nlmimp /usr/bin/nlmimp
 
+# Deep NLM verifier: independently recomputes image layout and every relocation site, catching
+# the toolchain-corruption class behind the 2025 abends without booting NetWare. Used by the
+# test build below and available in the dev container after any `make`. Needs python3, so it
+# runs here rather than in the builder stage (which deliberately stays python-free).
+COPY --chmod=755 verify_nlm.py /usr/local/bin/verify-nlm
+
 # Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
 # baking them into image layers or re-downloading them every time. Debian images delete
 # downloaded packages after each install by default, hence removing docker-clean here.
@@ -339,9 +345,15 @@ RUN sed -i.bak 's/CFLAGS = /CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tabl
 RUN sed -i.bak 's/nlmconv --output-target/nlmconv --debug --output-target/g' Makefile
 RUN mv hello.o hello_orig.o
 RUN mv hello.nlm hello_orig.nlm
+# The sample .def ships without STACK; nlmconv writes 0 into the header then, which verify-nlm
+# below (and good sense - see the STACK sizing section of docs/nlm-toolchain-notes.md) rejects.
+RUN echo 'STACK 32768' >> hello.def
 RUN make
 RUN ls -lh hello.o
 RUN ls -lh hello.nlm
+# Deep verification: recompute the image layout and every relocation site independently and
+# compare byte-for-byte against what nlmconv wrote (docs/nlm-toolchain-notes.md has the theory).
+RUN verify-nlm hello.nlm hello.def
 
 # Make the (current) non-root user's home directory the default work directory for this container image.
 WORKDIR /home/$USERNAME

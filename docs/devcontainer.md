@@ -71,7 +71,13 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    planned as a sidecar container), creates the non-root `dev-container-user`, installs Claude
    Code natively (`curl -fsSL https://claude.ai/install.sh | bash` — not the npm-based devcontainer
    Feature, which left a root-owned leftover that broke auto-update permissions for a non-root user),
-   and repeats the sample-NLM test build as the non-root user as a smoke test.
+   and repeats the sample-NLM test build as the non-root user as a smoke test — then deep-verifies
+   the produced NLM with `verify-nlm` (`.devcontainer/verify_nlm.py`, installed to
+   `/usr/local/bin`), which independently recomputes the image layout and byte-checks every
+   relocation site against the ELF intermediate, so relocation corruption of the 2025 class fails
+   the image build instead of abending NetWare later. The sample `.def` gets a `STACK 32768` line
+   appended first (it ships without one, and nlmconv would write a 0 stack that verify-nlm
+   rejects).
 
 ## Debian base images (bumped to 13.6 on 2026-07-19)
 

@@ -46,6 +46,14 @@ Mechanism, two layers deep:
   the callee (compare against `nm` output of the `ld -Ur` intermediate; reproduce that
   intermediate with
   `i386-netware-ld -Ur -o test.O hello.o vga_util.o /usr/nwsdk/lib/prelude.o && objdump -r test.O`).
+- All of that verification is automated by **`verify-nlm <file.nlm> <file.def>`** (installed from
+  `.devcontainer/verify_nlm.py`; run it from the build directory so the `.def`'s INPUT paths
+  resolve). It re-runs nlmconv's `-Ur` pre-link, replicates its image-layout math, and
+  byte-verifies every relocation site in the finished NLM (internal PC-relative, internal
+  absolute, and import placeholders), plus the signature and STACK header field. The Dockerfile
+  runs it against the dev-env sample build, so a toolchain regression of the 2025 class fails the
+  image build itself. If it ever reports a *layout replication mismatch*, the script's model of
+  nlmconv has drifted — fix the script before trusting anything else it says.
 - Tool naming: the binutils-2.30 tools are installed as `i386-netware-ld` and
   `i386-netware-objdump` (plus `nlmconv` itself) — cross-tool-style names so they can never
   shadow the host toolchain (gas 2.30 shadowing the host `as` broke Debian 13 builds with
