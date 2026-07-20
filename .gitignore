@@ -7,3 +7,4 @@
 .claude-rebuild-backup*/
 .devcontainer/download_cache/
 .vscode/
+vm-images/
