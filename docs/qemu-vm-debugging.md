@@ -45,6 +45,28 @@ python3/socat/jq — is already installed).
   buffer (observed 2026-07-19; blind-typed commands would likely still work) — but without the
   restore, every automated graphics test ends in a VM reset instead of a clean next iteration.
 
+## Considered and rejected: Vagrant
+
+Vagrant (managed from inside the dev container) was weighed against the sidecar and rejected — its
+value-add doesn't apply here, and it hides the interface the agent needs:
+
+- Vagrant's lifecycle machinery assumes a *cooperative guest* it can SSH/WinRM into to provision,
+  key, and detect "booted." NetWare 3.x has none of that, so it'd run with `communicator: none`,
+  synced folders off, and boot-timeout hacks — i.e. most of Vagrant disabled, used as a bare
+  "launch this disk" wrapper. No NetWare box exists either, so the box ecosystem is moot.
+- Vagrant doesn't expose QMP — the exact channel this loop is built on (keystroke injection,
+  screendump, `system_reset`). Its providers spawn QEMU/libvirt themselves without handing back a
+  stable QMP socket, so the agent would reach *around* Vagrant straight to QEMU anyway.
+- Vagrant manages a *local* provider, so it implies the VM running inside the dev container
+  (libvirt/vagrant-qemu; VirtualBox-in-a-container isn't realistic) — reintroducing exactly what
+  the sidecar decision rejected (`qemu-system-x86` back in the lean dev image, plus `libvirtd` and
+  a Ruby/Vagrant stack), on the under-trodden Vagrant + rootless-Podman + nested-container path.
+
+The sidecar keeps the QEMU command line (period-correct `-machine`/`-cpu`/NIC, `-qmp`, `-vnc`,
+`-serial file:`) under direct control, gives two reset primitives (QMP `system_reset` plus a
+container restart for a wedged VM), and stays reproducible via a compose service — the declarative
+benefit a `Vagrantfile` would offer, without the extra runtime.
+
 ## Starting point for research
 
 QEMU's QMP (QEMU Machine Protocol — a JSON-based monitor socket) is the standard mechanism for
