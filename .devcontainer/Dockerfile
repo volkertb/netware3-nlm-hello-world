@@ -258,6 +258,9 @@ FROM debian:13.6 AS dev-env
 ARG USERNAME=dev-container-user
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
+# VS Code Server forwards the client machine's LANG into every terminal it opens here; override
+# this at build time (--build-arg LOCALE=...) to match, if it isn't en_US.UTF-8.
+ARG LOCALE=en_US.UTF-8
 
 COPY --from=builder /nlm_disk.img /nlm_disk.img
 COPY --from=builder /usr/local /usr/local
@@ -283,6 +286,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt -y install build-essential gcc-multilib
+
+# Debian's base image ships no locale data, so bash's setlocale() failed on the LANG value
+# forwarded in above (IDE-level, not container-runtime-level - Docker-based dev containers hit
+# this too) until that locale actually exists in the image. Debian's locale-gen ignores CLI
+# arguments entirely and only ever reads /etc/locale.gen, which ships fully commented out.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install locales \
+    && echo "$LOCALE UTF-8" >> /etc/locale.gen \
+    && locale-gen
 
 # Install dependencies required to allow this to be used as a Dev Container
 # (see https://www.jetbrains.com/help/rider/Prerequisites_for_dev_containers.html#remote_container)

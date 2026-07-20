@@ -135,6 +135,29 @@ Set via `ENV` in `dev-env` rather than relying on Debian's `~/.profile` skel def
 login shells source — VS Code terminals and most tooling spawn non-login shells. Not
 agent-specific: any user-installed CLI under `~/.local/bin` needs it.
 
+## Locale warnings in VS Code terminals
+
+`bash: warning: setlocale: LC_CTYPE: cannot change locale (en_US.UTF-8): No such file or
+directory` on every new integrated-terminal shell (2026-07-20, first seen right after the
+13.6 base-image bump, though the underlying gap — no locale ever generated in this image —
+predates it). Two things had to both be true, neither obvious from the container side alone:
+
+- VS Code Server forwards the *client machine's* `LANG` into every terminal it spawns inside the
+  container. This is IDE-level behavior, not container-runtime-level — a Docker-based dev
+  container hits it identically; Podman isn't implicated. Confirmed by process tree: the
+  container's own PID 1 has no `LANG` in its environment at all, but every bash the pty host
+  spawns already has `LANG=en_US.UTF-8` set before `.bashrc` runs.
+- Debian's `locale-gen` (`/usr/sbin/locale-gen`, `locales` package) **ignores CLI arguments
+  entirely** — the only argument it inspects is `--keep-existing`. It reads exclusively from
+  `/etc/locale.gen`, which ships with every locale commented out. `locale-gen en_US.UTF-8`
+  therefore "succeeds" (exit 0) while silently generating nothing — verify with
+  `locale -a`/`ls /usr/lib/locale`, not the exit code.
+
+Fix (`dev-env` stage): `echo "$LOCALE UTF-8" >> /etc/locale.gen && locale-gen`, where `LOCALE`
+is a build `ARG` defaulting to `en_US.UTF-8` (override with `--build-arg LOCALE=...` to match a
+host forwarding a different locale — not hardcoded because the forwarded value is a property of
+whoever's host, not of this image).
+
 ## Local build/test loop
 
 `.devcontainer/build_and_fetch_floppy_image.sh` builds the image with `podman` (swap `OCI_TOOL`
