@@ -42,7 +42,7 @@ services:
       - ../logs:/vm/logs
     networks:
       - sidecar-net
-    # No `ports:` here - deliberately. QMP (4444: VM control - reset/quit/screendump/keystrokes)
+    # No `ports:` here - deliberately. QMP (4444: VM control - reset/quit/screendump/generic QMP)
     # and the supervisor's own control port (4445: power on/off) are reachable ONLY from `dev`,
     # over the private `sidecar-net` network below, by service name (qemu:4444, qemu:4445).
     # QMP has NO authentication of its own: anything that can open that TCP port has full
@@ -58,17 +58,10 @@ networks:
     driver: bridge
 
 volumes:
-  # Generic, tool-agnostic persistent volume. Nothing writes to it by default - see
-  # devcontainer.json's postCreateCommand for how it actually gets used (symlinking coding-agent
-  # state in, gitignored, per-developer). Moved here from devcontainer.json's old `mounts` now
-  # that `dev` is a Compose service rather than a single-container build.
-  #
-  # `name:` pinned explicitly (2026-07-20) to the literal volume name the old single-container
-  # `mounts` config used (`source=${localWorkspaceFolderBasename}-agent-state`, i.e.
-  # netware3-hello-world-agent-state) - without it, Compose derives a project-prefixed name
-  # instead (e.g. netware3-hello-world_devcontainer_agent-state), a DIFFERENT, empty volume that
-  # orphaned the old one on the first Compose rebuild and lost coding-agent session/auth state.
-  # Pinning it here means Compose attaches to the pre-existing volume instead of creating a new
-  # one, and stays stable regardless of how the devcontainer CLI derives its project name.
+  # Generic, tool-agnostic persistent volume - see devcontainer.json's postCreateCommand for how
+  # it's used (symlinking coding-agent state in, gitignored, per-developer). `name:` pinned
+  # explicitly, matching the old single-container `mounts` config's literal volume name - without
+  # it, Compose derives a project-prefixed name instead, a DIFFERENT (and initially empty) volume.
+  # Why that matters: docs/devcontainer.md.
   agent-state:
     name: netware3-hello-world-agent-state

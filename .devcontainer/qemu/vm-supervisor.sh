@@ -37,22 +37,15 @@ start_qemu() {
     if qemu_running; then
         return 0
     fi
-    # -machine pc + if=ide matches the PIIX3/IDE chipset the disk was already installed against
-    # under VirtualBox; -display none + -nic none because this is the headless MVP (no VNC, no
-    # network yet - see docs/qemu-vm-debugging.md for what's deferred and why.
-    # QEMU's own stdout/stderr (startup errors: bad disk path, KVM refusing the CPU model,
-    # etc.) redirected into the shared logs/ dir, not left to the container's own stdout - the
-    # dev container has no podman/docker access to read `podman logs` itself, so this is the
-    # only channel it has onto why a start attempt failed. Appended, not truncated, so a
-    # crash-restart loop's history survives.
-    # accel=kvm:tcg is a `-machine` property (colon-list documented in qemu-options.hx: "accel=
-    # accel1[:accel2[:...]] selects accelerator") - NOT the standalone `-accel` flag, which
-    # takes exactly one accelerator name per occurrence and rejected a colon-joined value
-    # outright ("invalid accelerator kvm:tcg", caught via qemu-stdouterr.log below).
-    # -m 16 matches the confirmed-working VirtualBox VM's RAM exactly (16MB), not a guess: 64MB
-    # made NetWare 386's own loader fail with "Insufficient memory... requires at least 3
-    # megabytes of extended memory" - a DOS-era memory-detection quirk triggered by *more* RAM,
-    # not a real shortfall (confirmed via QMP pmemsave of the VGA text buffer at 0xB8000).
+    # -machine pc + if=ide matches the PIIX3/IDE chipset the disk was installed against under
+    # VirtualBox. -display none + -nic none: headless MVP, no VNC/network yet. accel=kvm:tcg
+    # must be a `-machine` property, not the standalone `-accel` flag (rejected outright), and
+    # -m 16 matches the source VirtualBox VM's RAM exactly - more RAM broke NetWare's own loader.
+    # Both bugs and how they were diagnosed: docs/qemu-vm-debugging.md ("Two real bugs").
+    #
+    # stdout/stderr appended to the shared logs/ dir rather than left on the container's own
+    # stdout: the dev container has no podman/docker access to read `podman logs` itself, so
+    # this file is its only window onto why a start attempt failed.
     qemu-system-i386 \
         -machine pc,accel=kvm:tcg \
         -cpu pentium \

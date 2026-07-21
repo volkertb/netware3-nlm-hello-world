@@ -11,5 +11,6 @@ RUN apk add --no-cache qemu-system-i386 socat
 COPY --chmod=755 vm-supervisor.sh /usr/local/bin/vm-supervisor.sh
 
 # No CMD arg: vm-supervisor.sh defaults to its "run" (supervisor loop) mode when started with no
-# arguments. `docker/podman exec` calls from vmctl pass "apply <word>" explicitly instead.
+# arguments. Its "apply <word>" mode runs instead per-connection, spawned by run mode's own
+# socat listener (see the script) - vmctl never execs into this container directly.
 ENTRYPOINT ["/usr/local/bin/vm-supervisor.sh"]

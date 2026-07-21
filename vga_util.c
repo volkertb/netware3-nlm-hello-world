@@ -1,7 +1,7 @@
 #include "implicit_nlm_defs.h"
 #include "vga_util.h"
 
-#include <nwadv.h>                                /* Int68, NetWare's safe proxy for BIOS Int 10h */
+#include <nwadv.h>                                /* unused; see docs/ndk-independence.md Tier 1 */
 
 #define BRIGHT_GREEN_TEXT_ON_BLACK_BACKGROUND 0x0A;
 

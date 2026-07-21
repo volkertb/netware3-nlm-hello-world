@@ -26,7 +26,8 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
 ## Devcontainer
 
 Details, stage rationale, and troubleshooting history: [docs/devcontainer.md](docs/devcontainer.md).
-Summary: 4-stage Dockerfile (`downloader-and-patcher` → `binutils-builder` → `builder` →
+Two Compose services: `dev` (this repo's build/test environment) and `qemu` (the sidecar below).
+`dev`'s image is a 4-stage Dockerfile (`downloader-and-patcher` → `binutils-builder` → `builder` →
 `dev-env`). Downloads and binutils source patching happen on current Debian in
 `downloader-and-patcher`; only `binutils-builder` uses EOL Debian 9, kept to configure+make of
 binutils 2.30, whose obsolete `nlm32-i386` target won't build on newer toolchains and was removed

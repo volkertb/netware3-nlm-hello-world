@@ -66,25 +66,20 @@ give the human a live equivalent of either.
 
 ### Two real bugs found getting the first boot working (2026-07-21)
 
-- **`-accel kvm:tcg` (standalone flag) doesn't exist** — QEMU rejected it outright:
-  `invalid accelerator kvm:tcg`. The colon-separated fallback-list syntax is real, but it's a
-  property of `-machine` (`-machine pc,accel=kvm:tcg`; qemu-options.hx: `accel=
-  accel1[:accel2[:...]]`), not the standalone `-accel` flag, which takes exactly one accelerator
-  name per occurrence. An earlier pass through this doc asserted the standalone-flag colon
-  syntax as verified against qemu.org, which was wrong — the mistake was trusting an AI-summarized
-  doc fetch that described the `-machine` property's behavior while it got applied to the wrong
-  flag; the fix was reading the option's actual `DEF(...)` string in qemu-options.hx instead.
-  Only caught at all because QEMU's own stdout/stderr got redirected into
+- **`-accel kvm:tcg` doesn't exist as a standalone flag** — QEMU rejected it outright:
+  `invalid accelerator kvm:tcg`. The colon-separated fallback list is real, but it's a `-machine`
+  property (`-machine pc,accel=kvm:tcg`; qemu-options.hx: `accel=accel1[:accel2[:...]]`) — the
+  standalone `-accel` flag takes exactly one accelerator name per occurrence. A doc-fetch
+  described the `-machine` property's behavior and got misapplied to the wrong flag; confirmed
+  correct by reading the option's actual `DEF(...)` string in qemu-options.hx instead of trusting
+  a summarized fetch. Only diagnosable at all because QEMU's own stdout/stderr is redirected into
   `logs/qemu-stdouterr.log` — the dev container has no `podman`/`docker` access to read the
-  sidecar's container log directly, so this file is the only diagnostic channel it has.
+  sidecar's container log directly.
 - **`-m 64` (more RAM than the source VM) broke NetWare's own loader**: `Insufficient memory to
-  run NetWare 386 (requires at least 3 megabytes of extended memory)`, hit even though 64MB is
-  far more than 3MB. Confirmed via the `pmemsave` text-buffer read above. This is a DOS-era
-  memory-detection quirk, not a real shortfall — the fix was matching the confirmed-working
-  VirtualBox VM's RAM exactly (`-m 16`, the VDI this qcow2 was converted from used 16MB), not
-  guessing QEMU values. Root cause of the quirk itself (CMOS extended-memory byte semantics,
-  SeaBIOS memory-map presentation, or something in the guest's own CONFIG.SYS) not investigated
-  further since matching the known-good value was sufficient.
+  run NetWare 386 (requires at least 3 megabytes of extended memory)`, despite 64MB being far
+  more than 3MB — a DOS-era memory-detection quirk, not a real shortfall (root cause not chased
+  further). Fixed by matching the confirmed-working VirtualBox VM's RAM exactly (`-m 16`) instead
+  of guessing QEMU values.
 
 ### Seams left for the deferred work
 
@@ -97,7 +92,10 @@ give the human a live equivalent of either.
 
 ## Requirements (as stated by the user, 2026-07-19)
 
-The MVP above covers the first two bullets only; the rest are still open.
+Done: the sidecar-container decision, and screen reads (`pmemsave`/`screendump`) plus generic QMP
+passthrough for debugging. Still open: keyboard injection (`send-key` isn't wired into `vmctl`
+yet), automatic hang detection (`vmctl status` only checks the process is alive, not that the
+guest is responsive), and everything VNC-related.
 
 - A QEMU instance running a NetWare 3.x VM, spun up alongside the devcontainer as a sidecar
   container (decided; see "Other `devcontainer.json` settings" in [devcontainer.md](devcontainer.md)
@@ -110,7 +108,7 @@ The MVP above covers the first two bullets only; the rest are still open.
 - A helper script/instructions so the human's VNC viewer starts *before* QEMU itself, then
   auto-connects the moment QEMU comes up — and auto-reconnects after every reboot/reset.
 - Text-mode/console output logged to a file as well (`-serial file:` is wired up but, per above,
-  stays empty for this guest — `screendump` is the real path until VNC lands).
+  stays empty for this guest — `pmemsave`/`screendump` are the real path until VNC lands).
 
 ## Existing groundwork already in place
 
@@ -157,17 +155,8 @@ benefit a `Vagrantfile` would offer, without the extra runtime.
   client connecting (`server,nowait` is the older, equivalent spelling).
 - `-serial file:PATH` logs the serial line to a file — see the VGA-not-serial caveat above for why
   this alone doesn't give console output for this guest.
-- Accelerator fallback (try KVM, fall back to TCG on a KVM-less host) is a `-machine` property,
-  `-machine pc,accel=kvm:tcg` — colon-separated, per qemu-options.hx's `accel=
-  accel1[:accel2[:...]]`. **Not** the standalone `-accel` flag: that takes exactly one
-  accelerator name per occurrence and rejects a colon-joined value outright ("invalid
-  accelerator kvm:tcg") - caught only once QEMU's own stdout/stderr was redirected into
-  `logs/qemu-stdouterr.log` for `vmctl`/`qmp` to see, since the dev container has no
-  `podman`/`docker` access to read the sidecar's container log directly. First version of this
-  doc asserted the standalone-flag colon syntax as verified; it wasn't - a doc-summary tool
-  described the `-machine` property's behavior while I applied it to the wrong flag. Lesson:
-  confirm CLI syntax against the actual option's raw `DEF(...)` string (or by running it), not a
-  summarized fetch of prose that's easy to conflate between two similarly-named options.
+- Accelerator fallback is a `-machine` property, not the standalone `-accel` flag — see "Two real
+  bugs" above.
 
 How to make the VNC viewer reliably auto-connect on startup and auto-reconnect after a reset (a
 fixed/predictable address, a wrapper script that retries/polls, some other mechanism) is still an
