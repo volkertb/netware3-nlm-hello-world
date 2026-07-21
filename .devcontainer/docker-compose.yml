@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Two-service sidecar setup: `dev` is the existing single-container devcontainer image, `qemu`
+# runs the NetWare VM. This lives here (not folded into devcontainer.json) because
+# `dockerComposeFile` is the interface the devcontainer spec expects for anything beyond a
+# single Dockerfile. See docs/qemu-vm-debugging.md for why the VM runs in a sidecar rather than
+# qemu-system-x86 being installed into `dev` itself.
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # devcontainer.json's automatic workspace mount doesn't apply once a compose file is in
+      # play - the devcontainer spec requires it to be spelled out here instead.
+      - ..:/workspaces/netware3-hello-world:cached
+      - agent-state:/home/dev-container-user/.agent-state
+    # Keeps the container alive for the devcontainer CLI/IDE to exec into - VS Code/JetBrains
+    # don't provide a foreground process of their own the way `docker run -it` would.
+    command: sleep infinity
+    networks:
+      - sidecar-net
+
+  qemu:
+    build:
+      context: ./qemu
+    devices:
+      # KVM acceleration, moved here from devcontainer.json's old single-container `runArgs` now
+      # that QEMU itself runs in this service, not `dev`. `dev` no longer needs /dev/kvm at all,
+      # which also means a KVM-less host no longer blocks the dev container from starting.
+      - /dev/kvm:/dev/kvm
+    volumes:
+      # NETWARE_VM_IMAGE lets this point at a different image later without editing this file -
+      # export it in the shell that runs `devcontainer up`/`compose up`. A relative override
+      # path is resolved relative to THIS file's directory (.devcontainer/), not the repo root -
+      # that's a Compose rule (relative volume paths resolve against the compose file's own
+      # location), not something specific to this override.
+      - ${NETWARE_VM_IMAGE:-../vm-images/netware-3x.qcow2}:/vm/disk.qcow2
+      # Bind (not a named volume), so the exact same files are visible to `dev` too via its own
+      # workspace mount above - screendumps/serial logs land in ./logs for vmctl/qmp to read.
+      - ../logs:/vm/logs
+    networks:
+      - sidecar-net
+    # No `ports:` here - deliberately. QMP (4444: VM control - reset/quit/screendump/keystrokes)
+    # and the supervisor's own control port (4445: power on/off) are reachable ONLY from `dev`,
+    # over the private `sidecar-net` network below, by service name (qemu:4444, qemu:4445).
+    # QMP has NO authentication of its own: anything that can open that TCP port has full
+    # control of the VM. Do not add a `ports:` mapping for either port - that would expose VM
+    # control to anything that can reach this host. When VNC lands for the human-facing view, IT
+    # is the one port that gets published on purpose (a read/interact surface, not raw QMP).
+
+networks:
+  sidecar-net:
+    # Explicit (rather than relying on Compose's implicit default network) purely so the "not
+    # published to the host" boundary above is a named, documented thing, not an accident of
+    # Compose defaults.
+    driver: bridge
+
+volumes:
+  # Generic, tool-agnostic persistent volume. Nothing writes to it by default - see
+  # devcontainer.json's postCreateCommand for how it actually gets used (symlinking coding-agent
+  # state in, gitignored, per-developer). Moved here from devcontainer.json's old `mounts` now
+  # that `dev` is a Compose service rather than a single-container build.
+  #
+  # `name:` pinned explicitly (2026-07-20) to the literal volume name the old single-container
+  # `mounts` config used (`source=${localWorkspaceFolderBasename}-agent-state`, i.e.
+  # netware3-hello-world-agent-state) - without it, Compose derives a project-prefixed name
+  # instead (e.g. netware3-hello-world_devcontainer_agent-state), a DIFFERENT, empty volume that
+  # orphaned the old one on the first Compose rebuild and lost coding-agent session/auth state.
+  # Pinning it here means Compose attaches to the pre-existing volume instead of creating a new
+  # one, and stays stable regardless of how the devcontainer CLI derives its project name.
+  agent-state:
+    name: netware3-hello-world-agent-state

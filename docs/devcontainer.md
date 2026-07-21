@@ -119,15 +119,77 @@ It prefers already-persisted state on conflict (`mv`-then-fallback-to-`rm`, not 
 overwrite) — an earlier version nested the fresh copy inside the persisted one instead of
 discarding it.
 
+The volume's name is pinned explicitly (`name: netware3-hello-world-agent-state` in
+`docker-compose.yml`, 2026-07-20) rather than left for Compose to derive. Compose otherwise
+prefixes named volumes with its project name (e.g.
+`netware3-hello-world_devcontainer_agent-state`), which is a *different* literal volume than the
+one the old single-container `mounts` config created (`source=${localWorkspaceFolderBasename}-agent-state`)
+— the Compose migration silently orphaned it on first rebuild and lost coding-agent session/auth
+state, recovered only because the old volume was still sitting there under its old name
+(`podman volume ls`).
+
+**Deferred**: the pinned name is a single fixed string, so two checkouts of this repo on the same
+host would collide/leak session state into the same volume. Not fixed now (single-checkout use
+today), but the fix if it's ever needed is a per-checkout suffix — `${devcontainerId}` is the
+spec-sanctioned mechanism for exactly this (the docker-in-docker Feature uses it the same way),
+but it only substitutes inside devcontainer.json's own properties (`mounts`, `runArgs`, ... - the
+same single-container-only list `runArgs` is on), not inside a referenced `docker-compose.yml`,
+and its hash algorithm isn't documented anywhere to replicate independently. The practical
+equivalent: an `initializeCommand` that hashes `${localWorkspaceFolder}` (host-side, stable per
+checkout) into a short suffix written to a gitignored `.devcontainer/.env`, which Compose's own
+`.env` loading then substitutes into the volume `name:`. Doing this later means another one-time
+`podman volume` copy, same as this one.
+
 ## Other `devcontainer.json` settings
 
 - `containerUser: "dev-container-user"` silences a JetBrains/Podman "user was not specified"
   error; must match the Dockerfile's `USER` (or be `"root"` if none).
-- `runArgs: ["--device=/dev/kvm"]` — KVM passthrough for the planned NetWare VM. Decided: QEMU
-  runs in a **sidecar container** ([qemu-vm-debugging.md](qemu-vm-debugging.md)); when that
-  lands, move this to the sidecar's config (also removes the "dev container won't start on
-  KVM-less hosts" side effect). Requires host-accessible `/dev/kvm` (mode 0666 here); a
-  `kvm`-group-locked host would need Podman's `--group-add=keep-groups`.
+- `dockerComposeFile`/`service`/`workspaceFolder` (2026-07-20): the devcontainer now builds via
+  `docker-compose.yml` instead of a single-container `build`, so the QEMU sidecar
+  ([qemu-vm-debugging.md](qemu-vm-debugging.md)) can run as a second Compose service.
+  `/dev/kvm` passthrough moved with it — from devcontainer.json's old single-container `runArgs`
+  to the `qemu` service's `devices:` in `docker-compose.yml` (also removes the old "dev
+  container won't start on KVM-less hosts" side effect, since `dev` no longer touches
+  `/dev/kvm` at all). Requires host-accessible `/dev/kvm` (mode 0666 here); a `kvm`-group-locked
+  host would need Podman's `--group-add=keep-groups` added to the `qemu` service.
+- `updateRemoteUserUID: false` (2026-07-20) works around a Podman bug, still open:
+  `--platform` on a `podman build` makes Podman distrust an already-local image and try to
+  re-resolve it instead of using local storage, which is exactly what the devcontainer CLI's
+  post-build UID-sync step does (a second `podman build --platform ...` with `FROM
+  $BASE_IMAGE=<the image just built>`) — it fails outright instead of the interactive registry
+  prompt the same bug produces in a terminal.
+  [microsoft/vscode-remote-release#9748](https://github.com/microsoft/vscode-remote-release/issues/9748)
+  shows it hitting a plain single-Dockerfile devcontainer too, not just Compose ones; this
+  repo's prior single-Dockerfile `build` just hadn't exercised it before this migration. Root
+  cause and maintainer discussion:
+  [podman-container-tools/podman#23055](https://github.com/podman-container-tools/podman/issues/23055)
+  (a mirror of containers/podman — the commenters are Podman core maintainers). Disabling the
+  setting is the workaround taken here, since the Dockerfile already bakes `dev-container-user`
+  in at UID/GID 1000 (the common default for a first Linux user account) — if that ever stops
+  matching the host user, bind-mounted files may show up host-side-owned by a different UID.
+  **Host-level alternative**, if UID auto-sync matters more than avoiding this setting: add
+  `"localhost"` to `unqualified-search-registries` in the host's `/etc/containers/registries.conf`
+  (confirmed working in the linked issue thread), then set `updateRemoteUserUID` back to `true`
+  (or remove it — `true` is the spec default). That's a per-host change outside this repo, so
+  it isn't scripted here. This repo's config is a single shared `devcontainer.json`, and unlike
+  `dockerComposeFile` below, devcontainer.json has no merge/override mechanism to isolate a
+  Podman-only setting like this one — [devcontainers/spec#22](https://github.com/devcontainers/spec/issues/22)
+  proposes an `extends` property for exactly that, but it's still unimplemented. Docker users
+  should just flip this back to `true` by hand.
+- `docker-compose.podman-rootless.yml` (2026-07-20): a second, Podman-only compose file, named
+  in `dockerComposeFile`'s array form and merged on top of `docker-compose.yml` (later files
+  override/add to earlier ones, like multiple `-f` flags). Adds `userns_mode: "keep-id"` to the
+  `dev` service — needed because `devcontainers/cli` only auto-injects `--userns=keep-id` for
+  single-container Podman builds
+  ([devcontainers/cli#1004](https://github.com/devcontainers/cli/issues/1004), fixed by
+  [#1018](https://github.com/devcontainers/cli/pull/1018) — but only in `singleContainer.ts`),
+  never for Compose-based ones. Without it, rootless Podman's default UID mapping puts container
+  UID 0 at the host user, so the bind-mounted workspace shows up owned by `root` inside the
+  container and non-root `dev-container-user` can't write to it (silent under `ls`-level
+  checking — permissions look plausible until you try to build). `keep-id` is Podman-specific:
+  Docker's `--userns`/`userns_mode` only supports `"host"`, so merging this file would likely
+  hard-error under real Docker rather than no-op — it's a separate file specifically so a Docker
+  user's fix is deleting one `dockerComposeFile` array entry, not editing YAML in place.
 
 ## `~/.local/bin` on `PATH`
 

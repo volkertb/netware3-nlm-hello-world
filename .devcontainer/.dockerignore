@@ -1,0 +1,7 @@
+# Scoped to the `dev` service's build context (.devcontainer/ - see docker-compose.yml).
+#
+# Not read by the Dockerfile: every download happens into a BuildKit cache mount
+# (--mount=type=cache,target=/downloads-cache), a separate mechanism from the build context that
+# never touches this host directory. Without this file, its ~560MB (dominated by the NDK ISO)
+# got shipped to the build daemon on every single build for no reason.
+download_cache/

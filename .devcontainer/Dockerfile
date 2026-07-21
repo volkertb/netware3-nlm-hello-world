@@ -273,6 +273,12 @@ COPY --from=builder /usr/bin/nlmimp /usr/bin/nlmimp
 # runs here rather than in the builder stage (which deliberately stays python-free).
 COPY --chmod=755 verify_nlm.py /usr/local/bin/verify-nlm
 
+# QEMU sidecar control clients (docs/qemu-vm-debugging.md) - same PATH-install pattern as
+# verify-nlm above, so `vmctl`/`qmp` work from any directory instead of needing a repo-relative
+# path. Only the client side lives here; qemu/Dockerfile builds the sidecar itself.
+COPY --chmod=755 qemu/vmctl /usr/local/bin/vmctl
+COPY --chmod=755 qemu/qmp.py /usr/local/bin/qmp
+
 # Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
 # baking them into image layers or re-downloading them every time. Debian images delete
 # downloaded packages after each install by default, hence removing docker-clean here.

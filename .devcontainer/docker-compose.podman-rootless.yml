@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Podman-rootless-only addition, merged on top of docker-compose.yml (devcontainer.json's
+# dockerComposeFile is an ordered array - see there for why this is a separate file rather than
+# a line in the base one). NOT portable to Docker: `keep-id` is a Podman-specific `--userns`
+# value - Docker's `--userns` only supports `"host"` (see docs/devcontainer.md). Needed because
+# devcontainers/cli only auto-injects `--userns=keep-id` for single-container Podman builds, not
+# Compose-based ones (devcontainers/cli#1004, fixed by #1018 - but only in singleContainer.ts).
+# Without it, rootless Podman's default UID mapping puts container UID 0 at the host user, so
+# the bind-mounted workspace shows up owned by "root" inside the container and
+# `dev-container-user` (a non-root UID) can't write to it.
+#
+# Docker users: remove this file from devcontainer.json's `dockerComposeFile` array - Docker's
+# non-remapped-by-default UID handling doesn't need it.
+services:
+  dev:
+    userns_mode: "keep-id"

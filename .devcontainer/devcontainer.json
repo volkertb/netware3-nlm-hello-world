@@ -1,27 +1,41 @@
 {
-  "build": {
-    // Path is relative to the devcontainer.json file.
-    "dockerfile": "Dockerfile"
-  },
+  // A QEMU sidecar (docs/qemu-vm-debugging.md) runs alongside `dev` as a second Compose
+  // service - see docker-compose.yml for both services. Compose (not `build`+`runArgs`) is the
+  // devcontainer spec's interface for anything beyond a single container; with no `runServices`
+  // set, all services in the file are started.
+  //
+  // Array, not a single path: dockerComposeFile merges files in order, like multiple `-f`
+  // flags. docker-compose.podman-rootless.yml is a separate, Podman-only addition (bind-mount
+  // permissions under rootless Podman) kept out of the portable base file - see that file and
+  // docs/devcontainer.md. Docker users: drop it from this array.
+  "dockerComposeFile": ["docker-compose.yml", "docker-compose.podman-rootless.yml"],
+  "service": "dev",
+  // Required once a compose file is in play - Compose doesn't get the automatic workspace mount
+  // a single-container `build` devcontainer does, so docker-compose.yml mounts it explicitly
+  // and this just has to agree on the path.
+  "workspaceFolder": "/workspaces/netware3-hello-world",
   // Gets rid of the "user was not specified" error in JetBrains IDEs at the end of the Podman container image build
   // Should be the same as the USER configured in the Dockerfile.
   // If no explicit USER is specified in the Dockerfile (which is recommended), this value should be set to "root".
   "containerUser": "dev-container-user",
-  // Pass /dev/kvm through so a QEMU instance (run in-container or in a sidecar this container talks to)
-  // can use KVM acceleration. Requires /dev/kvm to exist on the host (i.e. the host itself supports KVM,
-  // not just a nested VM without it). On this host /dev/kvm is mode 0666 (systemd's default udev rule),
-  // so no group-membership workaround (e.g. Podman's "--group-add=keep-groups") is needed here — the
-  // device's own permission bits already allow any user to open it. If this ever moves to a host where
-  // /dev/kvm is locked to the "kvm" group instead, this will need "--group-add=keep-groups" (Podman-only)
-  // or an equivalent fix added back.
-  "runArgs": ["--device=/dev/kvm"],
-  // Generic, tool-agnostic persistent volume. Nothing writes to it by default -
-  // see postCreateCommand below for how to actually use it.
-  "mounts": [
-    "source=${localWorkspaceFolderBasename}-agent-state,target=/home/dev-container-user/.agent-state,type=volume"
-  ],
+  // Works around a Podman bug (open as of 2026-07-20): the CLI's post-build UID-sync step is a
+  // second `podman build --platform ...` of a generated Dockerfile with `FROM $BASE_IMAGE`
+  // pointing at the image just built here - `--platform` makes Podman distrust the local image
+  // and try to re-resolve it, which then fails outright instead of finding it in local storage.
+  // Also hits plain single-Dockerfile devcontainers (microsoft/vscode-remote-release#9748), not
+  // just Compose ones - this repo's prior single-Dockerfile `build` just hadn't hit it yet.
+  // Root cause and maintainer discussion:
+  // github.com/podman-container-tools/podman#23055 (a mirror of containers/podman - the
+  // commenters are Podman core maintainers). There's a host-level fix too, that keeps UID
+  // auto-sync working instead of disabling it here - see docs/devcontainer.md.
+  //
+  // Podman-only bug, but this setting is a single shared devcontainer.json (unlike
+  // dockerComposeFile above, devcontainer.json has no merge/override mechanism to isolate this
+  // the same way - devcontainers/spec#22 proposes one but it's unimplemented). Docker users:
+  // flip this back to `true` (the spec default) - Docker doesn't hit the bug this works around.
+  "updateRemoteUserUID": false,
   // Optionally create your own .devcontainer/postCreate.local.sh (gitignored) to
   // symlink specific coding-agent config/state directories (e.g. ~/.claude) into
-  // the volume mounted above, so they survive devcontainer rebuilds.
+  // the agent-state volume (docker-compose.yml) mounted into `dev`, so they survive rebuilds.
   "postCreateCommand": "[ -f .devcontainer/postCreate.local.sh ] && bash .devcontainer/postCreate.local.sh || true"
 }

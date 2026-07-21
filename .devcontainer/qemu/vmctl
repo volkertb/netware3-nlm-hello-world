@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# vmctl - dev-container control client for the NetWare QEMU sidecar. Installed on PATH.
+#
+# on/off/status talk to vm-supervisor.sh's own control listener (it owns the QEMU process
+# lifecycle so a fully-off VM can be turned back on - QMP dies with the QEMU process it
+# controls, so QMP alone can't do that). reset/screendump go straight to QMP via `qmp`. Both
+# ports are reachable only as the `qemu` compose service, never published to the host - see
+# docs/qemu-vm-debugging.md.
+set -euo pipefail
+
+HOST=qemu
+CTL_PORT=4445
+LOGS_DIR=${NETWARE_VM_LOGS_DIR:-/workspaces/netware3-hello-world/logs}
+
+usage() {
+    echo "usage: $(basename "$0") on|off|reset|status|screendump [name.ppm]" >&2
+    exit 2
+}
+
+if [ $# -lt 1 ]; then
+    usage
+fi
+
+case "$1" in
+    on|off|status)
+        printf '%s\n' "$1" | socat -T5 - "TCP:${HOST}:${CTL_PORT}"
+        ;;
+    reset)
+        qmp system_reset
+        ;;
+    screendump)
+        name=${2:-screendump.ppm}
+        mkdir -p "$LOGS_DIR"
+        # The path after filename= is resolved inside the qemu sidecar's OWN filesystem
+        # (/vm/logs there) - it shows up here because both containers bind-mount the same host
+        # directory to those two different paths.
+        qmp screendump "filename=/vm/logs/$name"
+        echo "written to $LOGS_DIR/$name"
+        ;;
+    *)
+        usage
+        ;;
+esac
