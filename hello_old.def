@@ -18,8 +18,10 @@ COPYRIGHT "Copyright (c) 2000 Martin Hinner <martin@hinner.info>" # (c) ...
 DESCRIPTION "Simple 'Hello world' NLM module." # title of nlm
 SCREENNAME "System Console"                 # Default screen name
 
-# Uncomment the OS_DOMAIN line if the NLM needs to run in Ring 0 with the OS
-# (NOTE: this only has effect in NetWare 4.x or later, everything runs in Ring 0 in NetWare 3.x)
+# Active: this NLM does direct hardware I/O (VGA register programming via outp/inp), which
+# requires OS-address-space (ring 0) loading - protected/APPLICATION_DOMAIN NLMs can't issue
+# raw port I/O (Novell NDK docs). No effect on NetWare 3.x (every NLM already runs in ring 0
+# there); matters on NetWare 4.x+ where domain enforcement (DOMAIN.NLM and later) is active.
 OS_DOMAIN
 
 # 128 KiB: generous for a large application's call depth. NetWare 3.x ring-0 stacks have no
