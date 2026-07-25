@@ -41,9 +41,11 @@ upstream after 2.31.
    end-to-end with `vmctl type` loading `HELLO.NLM` off a floppy `vmctl floppy load` inserted, and
    with `vmctl vnc`'s live view surviving `reset`/`off`/`on` with correct auto-reconnect. Only
    automatic hang/crash detection remains open.
-2. NDK independence and game platform ([docs/ndk-independence.md](docs/ndk-independence.md)) —
-   drop the proprietary NDK (its real build-time surface is one 892-byte glue object plus one
-   prototype), then a picolibc-based runtime for low-level/game NLM development.
+2. Game platform, two tracks ([docs/ndk-independence.md](docs/ndk-independence.md)) — Track A
+   (current): graphics/sound experiments on the NDK/CLIB toolchain as-is, period-developer style.
+   Track B (deferred): drop the proprietary NDK (its real build-time surface is one 892-byte glue
+   object plus one prototype) and a picolibc-based runtime, then redo Track A's experiments on it
+   for comparison.
 
 ## Rules
 

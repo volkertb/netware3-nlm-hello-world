@@ -1,9 +1,14 @@
-# NDK independence and the game-platform direction (plan, 2026-07-19)
+# NDK independence and the game-platform direction (plan, 2026-07-19; resequenced 2026-07-25)
 
-Goal: eliminate the proprietary Novell NDK from the build, then grow a small, license-clean
-runtime suitable for writing/porting **games** to NetWare 3.x (lots of low-level work: direct
-hardware access to graphics, sound, keyboard). Not implemented yet — this captures the analysis
-so any session can pick it up.
+Goal, two deliberately comparable tracks:
+
+- **Track A (current phase): graphics and sound experiments on the NDK/CLIB toolchain as-is** —
+  see what period developers actually had available, no independence work yet.
+- **Track B (deferred until Track A's experiments are done): NDK independence + picolibc port**,
+  then redo Track A's same graphics/sound experiments on the NDK-free stack, for a direct
+  side-by-side comparison against Track A. This is the eliminate-the-proprietary-NDK,
+  license-clean-runtime work the rest of this file analyzes. Not implemented yet — this captures
+  the analysis so any session can pick it up.
 
 ## What the build actually uses from the NDK (measured, 2026-07-19)
 
@@ -39,9 +44,10 @@ The `/usr/nwsdk` dependency surface is tiny:
   `_StartNLM` entirely. Needed only for NLMs that must run without CLIB.NLM loaded, and it is
   where the game platform naturally ends up (below).
 
-## Game platform: portable mini-libc + kernel-export glue
+## Game platform: portable mini-libc + kernel-export glue (Track B)
 
-Three layers, cleanly separable:
+Three layers, cleanly separable. Layer 3 (direct hardware) is exactly what Track A prototypes
+first on the NDK/CLIB toolchain — this section describes redoing it on Track B's NDK-free stack:
 
 1. **Freestanding mini-libc (fully portable, zero OS calls)**: `mem*/str*`, `snprintf`, `rand`,
    `qsort`, fixed-point or soft-float math. See "Choosing the mini-libc" below.
@@ -109,5 +115,13 @@ Link as a static `libc.a` listed in the `.def`.
 ## Suggested sequencing
 
 QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC), direct-hardware graphics, and
-text-mode restore on exit are all done — see [qemu-vm-debugging.md](qemu-vm-debugging.md). Next:
-tier 1+2 (NDK-free, verified by sidecar boots) → mini-libc port → sound.
+text-mode restore on exit are all done — see [qemu-vm-debugging.md](qemu-vm-debugging.md).
+
+**Track A, next up:** more graphics (other VGA modes, palette animation, Mode X) and sound (Adlib
+first — pure port I/O, easiest; Sound Blaster after — port I/O + DMA + IRQ), built and boot-tested
+the same way the VGA switch was, still on the existing NDK/CLIB toolchain. Keyboard IRQ hooking
+(see "Game platform" below) fits here too if it comes up before Track B.
+
+**Track B, once Track A's experiments are done:** tier 1+2 (NDK-free, verified by sidecar boots)
+→ mini-libc (picolibc) port → repeat Track A's graphics/sound experiments on the NDK-free stack
+for comparison.
