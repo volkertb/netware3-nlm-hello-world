@@ -11,4 +11,15 @@ unsigned int get_vga_cursor();
  */
 void putTextChars();
 
+/**
+ * Save/restore the 80x25 text buffer (0xB8000) and the VGA DAC palette around a graphics-mode
+ * excursion - set_text_mode()-style register reprogramming alone doesn't touch either, and
+ * 0xA0000/0xB8000 are different addressing views of the same physical VRAM, so a graphics-mode
+ * NLM that writes its own framebuffer stomps what text mode reads back afterward otherwise.
+ */
+void save_text_buffer();
+void restore_text_buffer();
+void save_vga_palette();
+void restore_vga_palette();
+
 #endif

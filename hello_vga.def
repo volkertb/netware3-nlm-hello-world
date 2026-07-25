@@ -6,6 +6,8 @@
 
 # define startup object files
 INPUT   hello_vga.o
+INPUT   hello_vga_pic.o                     # generated const arrays, see pcx_to_c.py
+INPUT   vga_util.o
 INPUT   /usr/nwsdk/lib/prelude.o            # clib startup code
 
 # all imported functions and import lists

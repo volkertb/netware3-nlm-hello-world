@@ -10,6 +10,12 @@
 #define VGA_OFFSET_LOW 0x0f
 #define VGA_OFFSET_HIGH 0x0e
 
+#define VGA_DAC_WRITE_INDEX 0x3c8
+#define VGA_DAC_READ_INDEX 0x3c7
+#define VGA_DAC_DATA 0x3c9
+
+#define TEXT_BUFFER_SIZE (80 * 25 * 2)
+
 /**
  * Just write some characters directly to the text mode screen buffer.
  */
@@ -31,11 +37,50 @@ inline void putTextChars() {
  * With thanks to https://dev.to/frosnerd/writing-my-own-vga-driver-22nn
  */
 inline unsigned int get_vga_cursor() {
-    return 0; // FIXME
-    // outp(VGA_CTRL_REGISTER, VGA_OFFSET_HIGH);
-    // int offset = inp(VGA_DATA_REGISTER) << 8;
-    // outp(VGA_CTRL_REGISTER, VGA_OFFSET_LOW);
-    // offset += inp(VGA_DATA_REGISTER);
-    // const unsigned int multiplier = 2;
-    // return offset * multiplier;
+    outp(VGA_CTRL_REGISTER, VGA_OFFSET_HIGH);
+    unsigned int offset = inp(VGA_DATA_REGISTER) << 8;
+    outp(VGA_CTRL_REGISTER, VGA_OFFSET_LOW);
+    offset += inp(VGA_DATA_REGISTER);
+    const unsigned int multiplier = 2;
+    return offset * multiplier;
+}
+
+static unsigned char saved_text_buffer[TEXT_BUFFER_SIZE];
+
+void save_text_buffer() {
+  unsigned char *text_buffer = (unsigned char *)0xB8000;
+  int i;
+  for (i = 0; i < TEXT_BUFFER_SIZE; i++) {
+    saved_text_buffer[i] = text_buffer[i];
+  }
+}
+
+void restore_text_buffer() {
+  unsigned char *text_buffer = (unsigned char *)0xB8000;
+  int i;
+  for (i = 0; i < TEXT_BUFFER_SIZE; i++) {
+    text_buffer[i] = saved_text_buffer[i];
+  }
+}
+
+/**
+ * Stored as the DAC's own raw 6-bit-per-channel values (not rescaled 8-bit), so restoring is a
+ * direct write-back with no further shifting.
+ */
+static unsigned char saved_dac_palette[256 * 3];
+
+void save_vga_palette() {
+  int i;
+  outp(VGA_DAC_READ_INDEX, 0);
+  for (i = 0; i < 256 * 3; i++) {
+    saved_dac_palette[i] = inp(VGA_DAC_DATA);
+  }
+}
+
+void restore_vga_palette() {
+  int i;
+  outp(VGA_DAC_WRITE_INDEX, 0);
+  for (i = 0; i < 256 * 3; i++) {
+    outp(VGA_DAC_DATA, saved_dac_palette[i]);
+  }
 }

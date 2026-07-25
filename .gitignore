@@ -10,3 +10,4 @@
 vm-images/
 shared/
 .devcontainer/.env
+/generated/
