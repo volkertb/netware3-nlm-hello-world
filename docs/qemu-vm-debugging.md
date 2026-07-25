@@ -12,45 +12,10 @@ in the dev image as `vmctl`/`qmp`).
 
 ## Status
 
-**2026-07-21, boot-verified**: `vmctl on` boots NetWare 3.12 to a live console prompt
-(`HELLO_THERE:`, volume `APPS` mounted, `NW4-IDLE.NLM` loaded) confirmed via QMP `pmemsave` of the
-VGA text buffer (see below) — `vmctl off` then `vmctl on` again confirmed a clean stop and a fresh
-reboot, with the sidecar container itself staying up across both. Two real bugs surfaced getting
-there, both now fixed in `vm-supervisor.sh` (details further down): the accelerator fallback flag,
-and the VM's RAM size.
-
-**2026-07-25, boot-verified**: floppy `load`/`eject` (`vmctl floppy load|eject|status`), letting
-the agent get a built `floppy.img` into the running VM instead of a human hand-carrying it in.
-Confirmed against a live VM: `load` copies the image into `shared/floppy/` and QMP-inserts it
-(`query-block` showed the right file, size, and format on `floppy0`); `eject` empties the tray
-(`query-block` showed no `inserted` key afterward); `vmctl reset` with the floppy still inserted
-booted straight into NetWare from the hard disk, confirming `-boot order=c` actually prevents the
-data floppy from being picked up as a boot device. Screendumps (`vmctl screendump`) are now
-converted PPM→PNG via `pnmtopng` (netpbm, added to the `dev-env` Dockerfile stage) to get under the
-Read tool's 256KB size cap, letting the agent inspect the console directly instead of only
-pixel-diffing the raw PPM.
-
-**2026-07-25, boot-verified**: keyboard injection (`vmctl type <text>` / `qmp type <text>`),
-closing the gap the floppy entry above left open. `type` is a client-side meta-command (not a real
-QMP command) that translates each character into a QMP `send-key` call (QKeyCode names verified
-against QEMU 10.0.0's `qapi/ui.json`) and sends them sequentially over one connection. Confirmed
-against a live VM with the real end-to-end scenario this whole sidecar exists for: with
-`floppy.img` already loaded, `vmctl type $'LOAD A:HELLO.NLM\n'` typed the command at the
-`HELLO_THERE:` prompt, and NetWare printed `Loading module HELLO.NLM` followed by the NLM's own
-`Hello world!` output — read back via QMP `pmemsave` of the VGA text buffer (see below), not a
-screendump, since decoded text is the right tool for a text-mode console. Still open: automatic
-hang/crash detection.
-
-**2026-07-25, boot-verified**: VNC (`vmctl vnc` prints the URL), the last item from the original
-requirements. noVNC (browser client, no host software needed) proxies to a loopback-only raw VNC
-port inside the `qemu` container — see "VNC" below for the full recipe. Confirmed against a live
-VM, browser open throughout: `vmctl reset` — console visibly resets over the live VNC view;
-`vmctl off` — noVNC shows a connection error and its own "reconnecting…" state, as designed;
-`vmctl on` after that — VM boots and the VNC client auto-reconnects in under a second, no manual
-reload; `vmctl on` while already running — idempotent (`ok`, no reset, no disruption to the
-already-connected VNC session). Getting the sidecar to actually pick up this code took an
-unrelated detour (`docs/devcontainer.md`'s "Rebuild Container" gotcha) — once past that, every
-requirement checked out.
+Boot-verified end to end: boot/shutdown (2026-07-21), floppy `load`/`eject` (2026-07-22), keyboard
+injection (2026-07-25), VNC (2026-07-25) — recipes and verification detail live in each feature's
+own `###` section below, not repeated here. Still open: automatic hang/crash detection (`vmctl
+status` only checks the process is alive, not that the guest is responsive).
 
 What exists now, deliberately scoped down from the full requirements below:
 
@@ -100,8 +65,8 @@ turned out unreliable: shells that source `/etc/profile` (Debian's own, shipped 
 image) reset `PATH` from scratch, discarding this image's `ENV PATH` before `qmp` ever runs — the
 absolute shebang is self-contained at exec time regardless of which shell invokes it.
 
-Landed 2026-07-25; not yet boot-verified (needs a devcontainer rebuild, same as any other
-Dockerfile change here).
+Boot-verified 2026-07-25: `qmp query-status` and everything built on it (`pmemsave`, `type`,
+`vnc`) work cleanly post-rebuild, confirming the absolute shebang resolves correctly.
 
 ### NetWare's console is VGA text, not serial
 
@@ -353,7 +318,3 @@ benefit a `Vagrantfile` would offer, without the extra runtime.
   against QEMU's own USB device docs) so it doesn't apply to a DOS-era guest; `vmport=on` (a
   `-machine` property) auto-creates a `vmmouse` PS/2 device with no separate `-device` flag needed
   — verified against QEMU 10.0.0 source (`hw/i386/pc.c`'s `pc_superio_init()`) — see "VNC" above.
-
-How to make the VNC viewer reliably auto-connect on startup and auto-reconnect after a reset was an
-open question as of 2026-07-19; resolved 2026-07-25 by using noVNC's own client-side `reconnect`/
-`reconnect_delay` query params instead of custom wrapper-script polling — see "VNC" above.

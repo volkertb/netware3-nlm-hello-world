@@ -108,12 +108,17 @@ target — no separate THREADS.NLM exists there.
 - `inp`/`outp`/`delay` have no SDK header declarations (hence `implicit_nlm_defs.h`); they
   resolve at load time as imports.
 
-## `TYPE 9` / `OS_DOMAIN`: not needed (resolved 2026-07-19, second boot test)
+## `TYPE`: 0 vs 9, and `OS_DOMAIN` (corrected 2026-07-25)
 
-`hello_old.def` with `TYPE 0` and `OS_DOMAIN` commented out behaves identically
-([screenshot](images/netware312-vga-mode13h-type0-no-osdomain-2026-07-19.png)) — both settings
-were dead weight from the 2025 misdiagnosis. Use `TYPE 0` for ordinary NLMs. Why `OS_DOMAIN`
-changes nothing: NetWare 3.x runs every NLM in ring 0 in one unprotected address space;
-protected domains (ring-3 loading via DOMAIN.NLM, which the flag opts out of) are a NetWare 4.x
-feature, so on 3.x there is nothing to opt out of. (Inference from feature history plus observed
-equivalence — not verified against Novell loader docs; moot in practice.)
+`hello_old.def` uses `TYPE 0` (Ordinary NLM), `hello.def` uses `TYPE 9` (Custom device module) —
+both boot-verified; the distinction doesn't matter for a console-only NLM like either of these.
+
+`OS_DOMAIN` is **active** (uncommented) in both `.def` files, not dead weight: both NLMs do direct
+hardware I/O (VGA register programming via `outp`/`inp`), which requires OS-address-space (ring 0)
+loading — protected/`APPLICATION_DOMAIN` NLMs can't issue raw port I/O (Novell NDK docs). It's a
+no-op on NetWare 3.x specifically (boot-tested both ways — with it commented out too,
+[screenshot](images/netware312-vga-mode13h-type0-no-osdomain-2026-07-19.png) — identical either
+way, every NLM already runs in ring 0 there, no domain enforcement exists yet), but documents a
+real requirement rather than noise: domain enforcement (`DOMAIN.NLM` and later, present in limited
+form since NetWare 4 — not a NetWare-5-only feature as first assumed) is what would actually
+reject an `APPLICATION_DOMAIN` NLM doing raw port I/O, on a version where it's enforced.

@@ -108,6 +108,7 @@ Link as a static `libc.a` listed in the `.def`.
 
 ## Suggested sequencing
 
-QEMU sidecar first (fast iteration is the multiplier for everything else) → tier 1+2 (NDK-free,
-verified by sidecar boots) → keyboard input + text-mode restore (makes interactive testing sane)
-→ mini-libc port → sound. Direct-hardware graphics already works today.
+QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC) and direct-hardware graphics are
+done — see [qemu-vm-debugging.md](qemu-vm-debugging.md). Next: text-mode restore on exit (makes
+interactive/automated testing sane after a graphics-mode NLM) → tier 1+2 (NDK-free, verified by
+sidecar boots) → mini-libc port → sound.

@@ -52,16 +52,13 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    `/usr/nwsdk`, `/usr/bin/nlmimp` from `builder`; installs JetBrains dev-container prerequisites
    and debugging/analysis tools (python3, xxd, file, bsdextrautils, qemu-utils, socat, jq,
    ripgrep, shellcheck, strace, netpbm — `--no-install-recommends`; `qemu-system-x86` deliberately
-   absent, the VM runs in a sidecar); installs `qmp`'s Python dependencies
-   (`.devcontainer/qemu/requirements.txt`) into an isolated venv (`/opt/qmp-venv`, referenced
-   directly by `qmp`'s shebang — see [qemu-vm-debugging.md](qemu-vm-debugging.md)); creates
-   non-root `dev-container-user`; installs Claude Code
-   natively (`curl -fsSL https://claude.ai/install.sh | bash` — the npm-based devcontainer
-   Feature left a root-owned leftover that broke auto-updates); repeats the sample-NLM build as
-   the non-root user and gates it with `verify-nlm` (installed from `.devcontainer/verify_nlm.py`
-   to `/usr/local/bin`; what it checks: [nlm-toolchain-notes.md](nlm-toolchain-notes.md)). The
-   sample `.def` gets `STACK 32768` appended first — it ships without one, and verify-nlm rejects
-   the resulting 0-stack header.
+   absent, the VM runs in a sidecar); sets up two Python venvs and an SCA/linting gate (below);
+   creates non-root `dev-container-user`; installs Claude Code natively (`curl -fsSL
+   https://claude.ai/install.sh | bash` — the npm-based devcontainer Feature left a root-owned
+   leftover that broke auto-updates); repeats the sample-NLM build as the non-root user and gates
+   it with `verify-nlm` (installed from `.devcontainer/verify_nlm.py` to `/usr/local/bin`; what it
+   checks: [nlm-toolchain-notes.md](nlm-toolchain-notes.md)). The sample `.def` gets `STACK 32768`
+   appended first — it ships without one, and verify-nlm rejects the resulting 0-stack header.
 
 ## Debian base images (bumped to 13.6 on 2026-07-19)
 
@@ -136,6 +133,24 @@ would be the spec-sanctioned mechanism for this (the docker-in-docker Feature us
 way), but it doesn't substitute inside a referenced `docker-compose.yml` — only devcontainer.json's
 own properties — and its hash algorithm isn't documented anywhere to replicate independently.
 Doing this later means another one-time `podman volume` copy, same as this one.
+
+## SCA/linting gate (`dev-env` stage)
+
+Two isolated venvs, kept separate since they serve different purposes: `/opt/qmp-venv` (`qmp`'s
+own runtime dependency, `qemu.qmp` — referenced directly by `qmp`'s shebang, not on `PATH`) and
+`/opt/lint-venv` (`ruff`/`pylint`/`pip-audit`, dev-time tooling, on `PATH`). Config
+(`.devcontainer/pyproject.toml`) disables pylint's mandatory-docstring checks and
+`verify_nlm.py`'s complexity metrics, both calibrated to this project's terse comment style and
+`verify_nlm.py`'s deliberately linear, single-function verification recipe.
+
+The gate itself: copies the whole build context, recursively finds every `*.sh`/`*.py` under it
+(so new scripts anywhere under `.devcontainer/` are picked up with no Dockerfile change), and runs
+shellcheck + `py_compile` + `ruff` + `pylint` + `pip-audit`, failing the build on any finding —
+same pattern as `verify-nlm` gating the sample NLM build. `vmctl` is named `vmctl.sh` in source for
+exactly this reason (picked up by the plain `*.sh` glob instead of a hardcoded exception); the
+installed `/usr/local/bin/vmctl` command still has no extension. Covers this project's own
+shell/Python setup scripts only — not the C/NLM code under test, a separate concern with no
+linting set up there yet.
 
 ## Other `devcontainer.json` settings
 
