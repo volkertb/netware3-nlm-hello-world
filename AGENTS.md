@@ -15,7 +15,7 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
   3.11/3.12. The QEMU sidecar (`vmctl on|off|reset|status|screendump|floppy load|eject`,
   [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) boots/stops the VM and gets
-  `floppy.img` into it (`vmctl floppy load`) — landed 2026-07-22, not yet boot-verified. Last
+  `floppy.img` into it (`vmctl floppy load`) — boot-verified 2026-07-25. Last
   full boot verification: 2026-07-19, both NLMs work, including the graphics switch that used to
   abend. Root cause of the 2025 abends was a toolchain relocation bug; every 2025-era theory
   (IOPL, `TYPE 9`, `OS_DOMAIN`) is dead. History, mechanism, and the mandatory CFLAGS rules:
@@ -35,10 +35,11 @@ upstream after 2.31.
 
 ## Planned work
 
-1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown landed
-   and boot-verified 2026-07-21; floppy `load`/`eject` landed 2026-07-22, pending boot
-   verification (`vmctl on|off|reset|status|screendump|floppy load|eject`, `qmp <command>`). VNC
-   for the human is still open.
+1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown
+   boot-verified 2026-07-21; floppy `load`/`eject` boot-verified 2026-07-25 (`vmctl
+   on|off|reset|status|screendump|floppy load|eject`, `qmp <command>`). Next: keyboard injection
+   (`send-key`, not yet wired into `vmctl`) — needed to confirm `LOAD A:HELLO.NLM` actually works
+   at the console, and a prerequisite for the still-open VNC work.
 2. NDK independence and game platform ([docs/ndk-independence.md](docs/ndk-independence.md)) —
    drop the proprietary NDK (its real build-time surface is one 892-byte glue object plus one
    prototype), then a picolibc-based runtime for low-level/game NLM development.

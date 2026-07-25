@@ -19,11 +19,18 @@ reboot, with the sidecar container itself staying up across both. Two real bugs 
 there, both now fixed in `vm-supervisor.sh` (details further down): the accelerator fallback flag,
 and the VM's RAM size.
 
-**2026-07-22, landed, not yet boot-verified**: floppy `load`/`eject` (`vmctl floppy
-load|eject|status`), letting the agent get a built `floppy.img` into the running VM instead of a
-human hand-carrying it in. The QMP recipe is source-verified (see below) but the boot-time proof —
-`LOAD A:HELLO.NLM` actually working at the console — needs a VM session to confirm; noted here as
-wired, not as verified.
+**2026-07-25, boot-verified**: floppy `load`/`eject` (`vmctl floppy load|eject|status`), letting
+the agent get a built `floppy.img` into the running VM instead of a human hand-carrying it in.
+Confirmed against a live VM: `load` copies the image into `shared/floppy/` and QMP-inserts it
+(`query-block` showed the right file, size, and format on `floppy0`); `eject` empties the tray
+(`query-block` showed no `inserted` key afterward); `vmctl reset` with the floppy still inserted
+booted straight into NetWare from the hard disk, confirming `-boot order=c` actually prevents the
+data floppy from being picked up as a boot device. Screendumps (`vmctl screendump`) are now
+converted PPM→PNG via `pnmtopng` (netpbm, added to the `dev-env` Dockerfile stage) to get under the
+Read tool's 256KB size cap, letting the agent inspect the console directly instead of only
+pixel-diffing the raw PPM. Not yet done: confirming NetWare actually *reads* an inserted floppy at
+the console (`LOAD A:HELLO.NLM`) — that needs keystroke injection, which isn't wired into `vmctl`
+yet (`send-key` is planned next, before VNC).
 
 What exists now, deliberately scoped down from the full requirements below:
 
@@ -66,7 +73,9 @@ That same reasoning ruled out a named volume for the floppy image below too — 
 its console to the VGA text buffer, not the serial line, unless remote console is separately
 configured in the guest. `vmctl screendump [name.ppm]` (QMP `screendump`) works with
 `-display none` and proves *something* is rendering, but for a text-mode guest it's a bitmap you
-have to eyeball or OCR. Faster, decodable path used to confirm the verified boot above: QMP
+have to eyeball or OCR — `pnmtopng` (netpbm, in the `dev-env` Dockerfile) converts the raw PPM to a
+PNG small enough for the Read tool's 256KB cap, so the agent can look at it directly rather than
+only pixel-diffing. Faster, decodable path used to confirm the verified boot above: QMP
 `pmemsave` of the VGA text buffer at physical address `0xB8000` (`753664` decimal), size `4000`
 (80×25 cells × 2 bytes: character + attribute) — `qmp pmemsave val=753664 size=4000
 filename=/vm/shared/logs/vgatext.bin`, then read every even byte as a character. VNC (deferred)
@@ -120,8 +129,11 @@ summarized-fetch mistake:
   picked up as a boot device on a `vmctl reset` — NetWare boots from the IDE disk regardless of
   what's in the floppy drive.
 
-Not yet done: confirming NetWare actually reads an inserted floppy at the console
-(`LOAD A:HELLO.NLM`) — needs a live VM session, same as the original boot verification did.
+Boot-verified 2026-07-25: `load`/`eject`/`status` round-tripped correctly against a live VM, and a
+`reset` with the floppy inserted still booted from disk, confirming the `-boot order=c` hardening.
+Not yet done: confirming NetWare actually reads the inserted floppy at the console
+(`LOAD A:HELLO.NLM`) — needs keystroke injection (`send-key`, planned next) rather than just a live
+VM session, since nothing yet drives the console's keyboard input.
 
 ## Requirements (as stated by the user, 2026-07-19)
 
