@@ -10,13 +10,20 @@ for fast joint human+agent development. QEMU runs in a **sidecar container**, no
 container (`qemu-system-x86` is deliberately absent from the dev image; the QMP client side lives
 in the dev image as `vmctl`/`qmp`).
 
-## Status (2026-07-21): MVP landed and boot-verified — boot/shutdown only
+## Status
 
-`vmctl on` boots NetWare 3.12 to a live console prompt (`HELLO_THERE:`, volume `APPS` mounted,
-`NW4-IDLE.NLM` loaded) confirmed via QMP `pmemsave` of the VGA text buffer (see below) —
-`vmctl off` then `vmctl on` again confirmed a clean stop and a fresh reboot, with the sidecar
-container itself staying up across both. Two real bugs surfaced getting there, both now fixed in
-`vm-supervisor.sh` (details further down): the accelerator fallback flag, and the VM's RAM size.
+**2026-07-21, boot-verified**: `vmctl on` boots NetWare 3.12 to a live console prompt
+(`HELLO_THERE:`, volume `APPS` mounted, `NW4-IDLE.NLM` loaded) confirmed via QMP `pmemsave` of the
+VGA text buffer (see below) — `vmctl off` then `vmctl on` again confirmed a clean stop and a fresh
+reboot, with the sidecar container itself staying up across both. Two real bugs surfaced getting
+there, both now fixed in `vm-supervisor.sh` (details further down): the accelerator fallback flag,
+and the VM's RAM size.
+
+**2026-07-22, landed, not yet boot-verified**: floppy `load`/`eject` (`vmctl floppy
+load|eject|status`), letting the agent get a built `floppy.img` into the running VM instead of a
+human hand-carrying it in. The QMP recipe is source-verified (see below) but the boot-time proof —
+`LOAD A:HELLO.NLM` actually working at the console — needs a VM session to confirm; noted here as
+wired, not as verified.
 
 What exists now, deliberately scoped down from the full requirements below:
 
@@ -26,11 +33,10 @@ What exists now, deliberately scoped down from the full requirements below:
 - `qemu/Dockerfile` is **Alpine**, not Debian — no toolchain-parity requirement with the NLM
   build, so `qemu-system-i386` + `socat` is the whole package list.
 - The agent controls the VM from the `dev` container via two client commands installed on
-  `PATH` (same pattern as `verify-nlm`): `vmctl on|off|reset|status|screendump` and `qmp
+  `PATH` (same pattern as `verify-nlm`): `vmctl on|off|reset|status|screendump|floppy` and `qmp
   <command> [key=value ...]` for raw QMP.
-- **Deferred, not yet built**: VNC (human-facing live view), and floppy `load`/`eject` of built
-  NLMs into the running VM. Both have seams left for them (see below) but weren't part of this
-  slice — the user explicitly scoped this pass to boot/shutdown only.
+- **Still deferred**: VNC (human-facing live view). Has a seam left for it (see below) but wasn't
+  part of either slice so far.
 
 ### Why a supervisor process, not just QMP
 
@@ -51,18 +57,20 @@ has no authentication of its own, so publishing that port would hand VM control 
 can reach the host. Chosen over a Unix socket on a shared volume specifically to dodge rootless
 Podman UID/permission alignment between the two containers' users — see
 [devcontainer.md](devcontainer.md) for other rootless-Podman friction already hit in this repo.
+That same reasoning ruled out a named volume for the floppy image below too — it's a host bind
+(`../shared:/vm/shared`) for the same UID-alignment reason, not a new decision.
 
 ### NetWare's console is VGA text, not serial
 
-`-serial file:/vm/logs/serial.log` is wired up, but **stays empty** — NetWare 3.x writes its
-console to the VGA text buffer, not the serial line, unless remote console is separately
+`-serial file:/vm/shared/logs/serial.log` is wired up, but **stays empty** — NetWare 3.x writes
+its console to the VGA text buffer, not the serial line, unless remote console is separately
 configured in the guest. `vmctl screendump [name.ppm]` (QMP `screendump`) works with
 `-display none` and proves *something* is rendering, but for a text-mode guest it's a bitmap you
 have to eyeball or OCR. Faster, decodable path used to confirm the verified boot above: QMP
 `pmemsave` of the VGA text buffer at physical address `0xB8000` (`753664` decimal), size `4000`
 (80×25 cells × 2 bytes: character + attribute) — `qmp pmemsave val=753664 size=4000
-filename=/vm/logs/vgatext.bin`, then read every even byte as a character. VNC (deferred) will
-give the human a live equivalent of either.
+filename=/vm/shared/logs/vgatext.bin`, then read every even byte as a character. VNC (deferred)
+will give the human a live equivalent of either.
 
 ### Two real bugs found getting the first boot working (2026-07-21)
 
@@ -73,22 +81,47 @@ give the human a live equivalent of either.
   described the `-machine` property's behavior and got misapplied to the wrong flag; confirmed
   correct by reading the option's actual `DEF(...)` string in qemu-options.hx instead of trusting
   a summarized fetch. Only diagnosable at all because QEMU's own stdout/stderr is redirected into
-  `logs/qemu-stdouterr.log` — the dev container has no `podman`/`docker` access to read the
-  sidecar's container log directly.
+  `shared/logs/qemu-stdouterr.log` — the dev container has no `podman`/`docker` access to read
+  the sidecar's container log directly.
 - **`-m 64` (more RAM than the source VM) broke NetWare's own loader**: `Insufficient memory to
   run NetWare 386 (requires at least 3 megabytes of extended memory)`, despite 64MB being far
   more than 3MB — a DOS-era memory-detection quirk, not a real shortfall (root cause not chased
   further). Fixed by matching the confirmed-working VirtualBox VM's RAM exactly (`-m 16`) instead
   of guessing QEMU values.
 
-### Seams left for the deferred work
+### Seam left for VNC
 
-- **VNC**: add `-vnc :0` (or similar) to the `qemu-system-i386` invocation in
-  `vm-supervisor.sh`, then *deliberately* publish that port in `docker-compose.yml` — the one
-  port meant to reach the host, unlike QMP/4445 above.
-- **Floppy load/eject**: QMP's `blockdev-add`/`blockdev-remove-medium` (or `change`) family,
-  driven the same way `qmp` already drives `system_reset`/`screendump`; the floppy image would
-  need its own bind mount into the `qemu` service, parallel to the disk/log ones already there.
+Add `-vnc :0` (or similar) to the `qemu-system-i386` invocation in `vm-supervisor.sh`, then
+*deliberately* publish that port in `docker-compose.yml` — the one port meant to reach the host,
+unlike QMP/4445 above.
+
+### Floppy load/eject (2026-07-22)
+
+`vmctl floppy load [image]` copies a built image (default: the repo-root `floppy.img`) into
+`shared/floppy/` — the same host-bind pattern `shared/logs/` already used, now generalized to
+`../shared:/vm/shared` with `logs`/`floppy` subdirs, rather than mounting the repo into `qemu` or
+introducing a named volume (ruled out above for the same rootless-Podman UID reason as the QMP
+transport choice). It then inserts the copy over QMP. `vmctl floppy eject`/`status` round out the
+verb set.
+
+The recipe, verified against **QEMU 10.0.0 source** (the version Alpine 3.22 ships) rather than
+docs summaries, since the accelerator-flag bug above was originally caused by exactly that kind of
+summarized-fetch mistake:
+
+- **Boot with an empty floppy tray**: `-device floppy,id=floppy0`, no `drive=`. In
+  `hw/block/fdc.c`, `floppy_drive_realize()` falls back to `blk_create_empty_drive()` when no
+  backend is given — a real, addressable, empty tray. The `pc` machine already instantiates the
+  ISA FDC by default (`hw/i386/pc.c`, `pc_superio_init()`: `create_fdctrl = !no_floppy`, true for
+  `pc`), so the device has a bus to attach to without any other machine changes.
+- **Insert**: QMP `blockdev-change-medium id=floppy0 filename=/vm/shared/floppy/<img>
+  format=raw` — not deprecated in 10.0 (`qapi/block.json`).
+- **Eject**: QMP `eject id=floppy0` — also not deprecated; succeeds even on an already-empty tray.
+- **`-boot order=c`** added alongside this so an inserted (non-bootable) data floppy can never get
+  picked up as a boot device on a `vmctl reset` — NetWare boots from the IDE disk regardless of
+  what's in the floppy drive.
+
+Not yet done: confirming NetWare actually reads an inserted floppy at the console
+(`LOAD A:HELLO.NLM`) — needs a live VM session, same as the original boot verification did.
 
 ## Requirements (as stated by the user, 2026-07-19)
 
@@ -122,7 +155,7 @@ guest is responsive), and everything VNC-related.
   After a graphics-mode test the server only *looks* hung — the console keeps running and writing
   to the invisible text buffer (observed 2026-07-19) — but without the restore, every automated
   graphics test would end in a VM reset instead of a clean next iteration. Not yet done; matters
-  once the floppy-load loop above exists.
+  now that `vmctl floppy load` (above) can get a graphics-mode test onto the VM.
 
 ## Considered and rejected: Vagrant
 
@@ -157,6 +190,10 @@ benefit a `Vagrantfile` would offer, without the extra runtime.
   this alone doesn't give console output for this guest.
 - Accelerator fallback is a `-machine` property, not the standalone `-accel` flag — see "Two real
   bugs" above.
+- `-device floppy,id=<id>` with no `drive=` boots an empty, addressable removable drive;
+  `blockdev-change-medium`/`eject` (QMP) insert/remove media at runtime — verified against QEMU
+  10.0.0 source (`hw/block/fdc.c`, `hw/i386/pc.c`, `qapi/block.json`), not a docs summary — see
+  "Floppy load/eject" above.
 
 How to make the VNC viewer reliably auto-connect on startup and auto-reconnect after a reset (a
 fixed/predictable address, a wrapper script that retries/polls, some other mechanism) is still an

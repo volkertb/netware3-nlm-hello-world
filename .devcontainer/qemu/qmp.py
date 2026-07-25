@@ -4,12 +4,13 @@
 Usage: qmp <command> [key=value ...]
 Examples: qmp system_reset
           qmp query-status
-          qmp screendump filename=/vm/logs/boot.ppm
+          qmp screendump filename=/vm/shared/logs/boot.ppm
+          qmp blockdev-change-medium id=floppy0 filename=/vm/shared/floppy/floppy.img format=raw
 
 QMP is JSON objects over a raw TCP stream - not guaranteed one object per line - so this reads a
 growing buffer and repeatedly tries json.JSONDecoder().raw_decode() rather than assuming
-newline framing. `filename=...` for screendump is a path inside the qemu sidecar's OWN
-filesystem (/vm/logs there), not the dev container's - it lands in ./logs here because both
+newline framing. `filename=...` above is a path inside the qemu sidecar's OWN filesystem
+(/vm/shared/... there), not the dev container's - it lands in ./shared here because both
 containers bind-mount the same host directory to those two different paths. See
 docs/qemu-vm-debugging.md.
 """

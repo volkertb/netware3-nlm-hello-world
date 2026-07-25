@@ -8,5 +8,5 @@
 .devcontainer/download_cache/
 .vscode/
 vm-images/
-logs/
+shared/
 .devcontainer/.env

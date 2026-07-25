@@ -9,6 +9,14 @@
   // a single-container `build` devcontainer does, so docker-compose.yml mounts it explicitly
   // and this just has to agree on the path.
   "workspaceFolder": "/workspaces/netware3-hello-world",
+  // Mirrors workspaceFolder into the container's own environment (verified: for Compose-based
+  // devcontainers the CLI bakes containerEnv into a real Compose `environment:` override at
+  // bring-up, not a per-exec injection - devcontainers/cli src/spec-node/dockerCompose.ts). Lets
+  // vmctl (.devcontainer/qemu/vmctl) resolve the workspace path from this one property instead
+  // of hardcoding it a second time - a rename only needs editing workspaceFolder above.
+  "containerEnv": {
+    "WORKSPACE_FOLDER": "${containerWorkspaceFolder}"
+  },
   // Gets rid of the "user was not specified" error in JetBrains IDEs at the end of the Podman container image build
   // Should be the same as the USER configured in the Dockerfile.
   // If no explicit USER is specified in the Dockerfile (which is recommended), this value should be set to "root".

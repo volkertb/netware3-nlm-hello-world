@@ -13,14 +13,15 @@
 set -u
 
 DISK=${DISK:-/vm/disk.qcow2}
-LOGDIR=${LOGDIR:-/vm/logs}
+LOGDIR=${LOGDIR:-/vm/shared/logs}
+FLOPPYDIR=${FLOPPYDIR:-/vm/shared/floppy}
 STATE_FILE=/run/vm.state
 PID_FILE=/run/qemu.pid
 QMP_PORT=4444
 CTL_PORT=4445
 SELF=/usr/local/bin/vm-supervisor.sh
 
-mkdir -p "$LOGDIR"
+mkdir -p "$LOGDIR" "$FLOPPYDIR"
 
 qemu_running() {
     [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
@@ -43,14 +44,23 @@ start_qemu() {
     # -m 16 matches the source VirtualBox VM's RAM exactly - more RAM broke NetWare's own loader.
     # Both bugs and how they were diagnosed: docs/qemu-vm-debugging.md ("Two real bugs").
     #
-    # stdout/stderr appended to the shared logs/ dir rather than left on the container's own
+    # -device floppy,id=floppy0 with no drive= boots an empty, addressable floppy tray (verified
+    # against QEMU 10.0.0 source: hw/block/fdc.c's floppy_drive_realize() falls back to
+    # blk_create_empty_drive(); the `pc` machine already wires up the ISA FDC by default, so this
+    # device has a bus to attach to). vmctl floppy load/eject fill and empty it at runtime over
+    # QMP. -boot order=c pins boot to the hard disk only, so an inserted data floppy can never
+    # get picked up as a boot device on a reset.
+    #
+    # stdout/stderr appended to the shared logs dir rather than left on the container's own
     # stdout: the dev container has no podman/docker access to read `podman logs` itself, so
     # this file is its only window onto why a start attempt failed.
     qemu-system-i386 \
         -machine pc,accel=kvm:tcg \
         -cpu pentium \
         -m 16 \
+        -boot order=c \
         -drive file="$DISK",format=qcow2,if=ide \
+        -device floppy,id=floppy0 \
         -qmp tcp:0.0.0.0:$QMP_PORT,server=on,wait=off \
         -serial file:"$LOGDIR"/serial.log \
         -display none \

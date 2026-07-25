@@ -145,6 +145,13 @@ Doing this later means another one-time `podman volume` copy, same as this one.
   `qemu` service's `devices:` (also drops the old "dev container won't start on KVM-less hosts"
   side effect, since `dev` no longer touches `/dev/kvm`). Requires host-accessible `/dev/kvm`
   (mode 0666 here); a `kvm`-group-locked host needs Podman's `--group-add=keep-groups` on `qemu`.
+- `containerEnv.WORKSPACE_FOLDER: "${containerWorkspaceFolder}"` mirrors `workspaceFolder` into
+  the container's actual environment, so scripts (`vmctl`) can read the path from one property
+  instead of hardcoding it a second time — a rename only needs editing `workspaceFolder` above.
+  Verified this applies to Compose-based devcontainers, not just single-container `build` ones
+  (unlike the `updateRemoteUserUID`/`runArgs` gap below): the CLI bakes `containerEnv` into a real
+  Compose `environment:` override merged at bring-up
+  (`devcontainers/cli`'s `src/spec-node/dockerCompose.ts`), not a per-exec injection.
 - `updateRemoteUserUID: false` works around an open Podman bug: `--platform` on a `podman build`
   makes Podman distrust an already-local image and try to re-resolve it, which is what the
   devcontainer CLI's post-build UID-sync step does (a second `podman build --platform ...` with

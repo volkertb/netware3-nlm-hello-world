@@ -13,12 +13,12 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
   (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
 - `*.def` files are the NLM header/link definitions consumed by `nlmconv`.
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
-  3.11/3.12. The QEMU sidecar (`vmctl on|off|reset|status`,
-  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) boots/stops the VM, but getting
-  `floppy.img` into it is still a manual step until floppy load/eject lands. Last full boot
-  verification: 2026-07-19, both NLMs work, including the graphics switch that used to abend. Root cause of
-  the 2025 abends was a toolchain relocation bug; every 2025-era theory (IOPL, `TYPE 9`,
-  `OS_DOMAIN`) is dead. History, mechanism, and the mandatory CFLAGS rules:
+  3.11/3.12. The QEMU sidecar (`vmctl on|off|reset|status|screendump|floppy load|eject`,
+  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) boots/stops the VM and gets
+  `floppy.img` into it (`vmctl floppy load`) — landed 2026-07-22, not yet boot-verified. Last
+  full boot verification: 2026-07-19, both NLMs work, including the graphics switch that used to
+  abend. Root cause of the 2025 abends was a toolchain relocation bug; every 2025-era theory
+  (IOPL, `TYPE 9`, `OS_DOMAIN`) is dead. History, mechanism, and the mandatory CFLAGS rules:
   [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md).
 - `.devcontainer/build_and_fetch_floppy_image.sh` builds the container image standalone and
   copies `/nlm_disk.img` to `~/Downloads/`, without opening a devcontainer session.
@@ -35,9 +35,10 @@ upstream after 2.31.
 
 ## Planned work
 
-1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown MVP
-   landed and boot-verified 2026-07-21 (`vmctl on|off|reset|status`, `qmp <command>`). VNC for
-   the human and floppy load/eject into the running VM are still open.
+1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown landed
+   and boot-verified 2026-07-21; floppy `load`/`eject` landed 2026-07-22, pending boot
+   verification (`vmctl on|off|reset|status|screendump|floppy load|eject`, `qmp <command>`). VNC
+   for the human is still open.
 2. NDK independence and game platform ([docs/ndk-independence.md](docs/ndk-independence.md)) —
    drop the proprietary NDK (its real build-time surface is one 892-byte glue object plus one
    prototype), then a picolibc-based runtime for low-level/game NLM development.

@@ -38,8 +38,11 @@ services:
       # location), not something specific to this override.
       - ${NETWARE_VM_IMAGE:-../vm-images/netware-3x.qcow2}:/vm/disk.qcow2
       # Bind (not a named volume), so the exact same files are visible to `dev` too via its own
-      # workspace mount above - screendumps/serial logs land in ./logs for vmctl/qmp to read.
-      - ../logs:/vm/logs
+      # workspace mount above. Named volumes were considered for this and rejected: they'd
+      # reintroduce the rootless-Podman UID friction the TCP-QMP decision above already dodged,
+      # since `dev` and `qemu` map to different host UIDs. Subdirs: `shared/logs` (screendumps,
+      # serial/stdout logs) and `shared/floppy` (images `vmctl floppy load` inserts into the VM).
+      - ../shared:/vm/shared
     networks:
       - sidecar-net
     # No `ports:` here - deliberately. QMP (4444: VM control - reset/quit/screendump/generic QMP)
