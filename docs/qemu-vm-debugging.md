@@ -28,9 +28,18 @@ booted straight into NetWare from the hard disk, confirming `-boot order=c` actu
 data floppy from being picked up as a boot device. Screendumps (`vmctl screendump`) are now
 converted PPM→PNG via `pnmtopng` (netpbm, added to the `dev-env` Dockerfile stage) to get under the
 Read tool's 256KB size cap, letting the agent inspect the console directly instead of only
-pixel-diffing the raw PPM. Not yet done: confirming NetWare actually *reads* an inserted floppy at
-the console (`LOAD A:HELLO.NLM`) — that needs keystroke injection, which isn't wired into `vmctl`
-yet (`send-key` is planned next, before VNC).
+pixel-diffing the raw PPM.
+
+**2026-07-25, boot-verified**: keyboard injection (`vmctl type <text>` / `qmp type <text>`),
+closing the gap the floppy entry above left open. `type` is a client-side meta-command (not a real
+QMP command) that translates each character into a QMP `send-key` call (QKeyCode names verified
+against QEMU 10.0.0's `qapi/ui.json`) and sends them sequentially over one connection. Confirmed
+against a live VM with the real end-to-end scenario this whole sidecar exists for: with
+`floppy.img` already loaded, `vmctl type $'LOAD A:HELLO.NLM\n'` typed the command at the
+`HELLO_THERE:` prompt, and NetWare printed `Loading module HELLO.NLM` followed by the NLM's own
+`Hello world!` output — read back via QMP `pmemsave` of the VGA text buffer (see below), not a
+screendump, since decoded text is the right tool for a text-mode console. Still open: automatic
+hang/crash detection, and everything VNC-related.
 
 What exists now, deliberately scoped down from the full requirements below:
 
@@ -131,16 +140,32 @@ summarized-fetch mistake:
 
 Boot-verified 2026-07-25: `load`/`eject`/`status` round-tripped correctly against a live VM, and a
 `reset` with the floppy inserted still booted from disk, confirming the `-boot order=c` hardening.
-Not yet done: confirming NetWare actually reads the inserted floppy at the console
-(`LOAD A:HELLO.NLM`) — needs keystroke injection (`send-key`, planned next) rather than just a live
-VM session, since nothing yet drives the console's keyboard input.
+NetWare reading the inserted floppy (`LOAD A:HELLO.NLM`) is now confirmed too, via `vmctl type` —
+see "Keyboard injection" below.
+
+### Keyboard injection (2026-07-25)
+
+`vmctl type <text>` / `qmp type <text>` — not a real QMP command, a client-side meta-command that
+translates each character of `<text>` into one QMP `send-key` call and sends them sequentially over
+a single connection (`send-key`'s own `keys` array is for simultaneous chords, e.g.
+ctrl+alt+delete, not a way to type a string in one call). QKeyCode names (`a`-`z`, `0`-`9`, `spc`,
+`dot`, `semicolon`, `ret`, ...) verified against **QEMU 10.0.0**'s `qapi/ui.json`, not a docs
+summary. Uppercase and shifted punctuation (e.g. `:` = shift+`semicolon`) send `shift` alongside
+the base key. A literal `\n` in `<text>` sends `ret` (Enter).
+
+Boot-verified 2026-07-25 with the actual end-to-end scenario this sidecar exists for: with
+`floppy.img` already loaded (see above), `vmctl type $'LOAD A:HELLO.NLM\n'` typed the command at
+the `HELLO_THERE:` prompt, and NetWare responded with `Loading module HELLO.NLM` followed by the
+NLM's own `Hello world!` output. Read back via QMP `pmemsave` of the VGA text buffer (see "NetWare's
+console is VGA text, not serial" above) rather than a screendump — decoded text is the right tool
+to verify a text-mode console, not a bitmap.
 
 ## Requirements (as stated by the user, 2026-07-19)
 
-Done: the sidecar-container decision, and screen reads (`pmemsave`/`screendump`) plus generic QMP
-passthrough for debugging. Still open: keyboard injection (`send-key` isn't wired into `vmctl`
-yet), automatic hang detection (`vmctl status` only checks the process is alive, not that the
-guest is responsive), and everything VNC-related.
+Done: the sidecar-container decision, screen reads (`pmemsave`/`screendump`) plus generic QMP
+passthrough for debugging, and keyboard injection (`vmctl type`/`qmp type`). Still open: automatic
+hang detection (`vmctl status` only checks the process is alive, not that the guest is responsive),
+and everything VNC-related.
 
 - A QEMU instance running a NetWare 3.x VM, spun up alongside the devcontainer as a sidecar
   container (decided; see "Other `devcontainer.json` settings" in [devcontainer.md](devcontainer.md)
@@ -194,8 +219,8 @@ benefit a `Vagrantfile` would offer, without the extra runtime.
 ## QMP/QEMU facts, verified against qemu.org before implementing
 
 - Commands used: `system_reset`, `quit` (VM power-off — not graceful; NetWare 3.x is pre-ACPI, so
-  `system_powerdown` would be a no-op on this guest), `screendump`. `send-key` (keystrokes) is the
-  documented mechanism for the still-open agent-input requirement above.
+  `system_powerdown` would be a no-op on this guest), `screendump`, `pmemsave`, `send-key`
+  (keystrokes, wired into `vmctl type`/`qmp type` — see "Keyboard injection" above).
 - `-qmp tcp:HOST:PORT,server=on,wait=off` opens a QMP TCP listener without blocking VM boot on a
   client connecting (`server,nowait` is the older, equivalent spelling).
 - `-serial file:PATH` logs the serial line to a file — see the VGA-not-serial caveat above for why

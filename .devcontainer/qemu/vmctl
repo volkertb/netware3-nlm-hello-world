@@ -21,6 +21,7 @@ FLOPPY_DIR="$SHARED_DIR/floppy"
 usage() {
     echo "usage: $(basename "$0") on|off|reset|status|screendump [name.ppm]" >&2
     echo "       $(basename "$0") floppy load [image] | floppy eject | floppy status" >&2
+    echo "       $(basename "$0") type <text>" >&2
     exit 2
 }
 
@@ -34,6 +35,13 @@ case "$1" in
         ;;
     reset)
         qmp system_reset
+        ;;
+    type)
+        text=${2:-}
+        if [ -z "$text" ]; then
+            usage
+        fi
+        qmp type "$text"
         ;;
     screendump)
         name=${2:-screendump.ppm}

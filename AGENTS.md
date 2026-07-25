@@ -35,11 +35,11 @@ upstream after 2.31.
 
 ## Planned work
 
-1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown
-   boot-verified 2026-07-21; floppy `load`/`eject` boot-verified 2026-07-25 (`vmctl
-   on|off|reset|status|screendump|floppy load|eject`, `qmp <command>`). Next: keyboard injection
-   (`send-key`, not yet wired into `vmctl`) — needed to confirm `LOAD A:HELLO.NLM` actually works
-   at the console, and a prerequisite for the still-open VNC work.
+1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown,
+   floppy `load`/`eject`, and keyboard injection all boot-verified as of 2026-07-25 (`vmctl
+   on|off|reset|status|screendump|floppy load|eject|type`, `qmp <command>`) — confirmed
+   end-to-end with `vmctl type` loading `HELLO.NLM` off a floppy `vmctl floppy load` inserted.
+   Only VNC (human-facing live view) remains open.
 2. NDK independence and game platform ([docs/ndk-independence.md](docs/ndk-independence.md)) —
    drop the proprietary NDK (its real build-time surface is one 892-byte glue object plus one
    prototype), then a picolibc-based runtime for low-level/game NLM development.
