@@ -7,18 +7,18 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
 ## Build & verify
 
 - `make` (repo root) builds two NLMs — `hello.nlm` (console output + text-buffer writes) and
-  `helloold.nlm` (adds a 320×200 VGA graphics-mode switch) — deep-verifies each with `verify-nlm`
-  (byte-checks every relocation and the NLM header, so toolchain corruption cannot slip through),
-  and packs both into `floppy.img` via `mtools`. Works only inside the devcontainer
-  (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
+  `helloold.nlm` (320×200 VGA graphics-mode switch, then restores 80×25 text mode before exiting)
+  — deep-verifies each with `verify-nlm` (byte-checks every relocation and the NLM header, so
+  toolchain corruption cannot slip through), and packs both into `floppy.img` via `mtools`. Works
+  only inside the devcontainer (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
 - `*.def` files are the NLM header/link definitions consumed by `nlmconv`.
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
   3.11/3.12. The QEMU sidecar (`vmctl on|off|reset|status|screendump|floppy load|eject|type|vnc`,
   [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) boots/stops the VM and gets
-  `floppy.img` into it (`vmctl floppy load`) — boot-verified 2026-07-25. Last
-  full boot verification: 2026-07-19, both NLMs work, including the graphics switch that used to
-  abend. Root cause of the 2025 abends was a toolchain relocation bug; every 2025-era theory
-  (IOPL, `TYPE 9`, `OS_DOMAIN`) is dead. History, mechanism, and the mandatory CFLAGS rules:
+  `floppy.img` into it (`vmctl floppy load`) — boot-verified 2026-07-25, including the text-mode
+  restore, both NLMs work, including the graphics switch that used to abend. Root cause of the
+  2025 abends was a toolchain relocation bug; every 2025-era theory (IOPL, `TYPE 9`, `OS_DOMAIN`)
+  is dead. History, mechanism, and the mandatory CFLAGS rules:
   [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md).
 - `.devcontainer/build_and_fetch_floppy_image.sh` builds the container image standalone and
   copies `/nlm_disk.img` to `~/Downloads/`, without opening a devcontainer session.

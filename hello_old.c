@@ -4,6 +4,7 @@
 
 #include "implicit_nlm_defs.h"
 #include "vgamode.c"
+#include "modes.c"                                /* set_text_mode() */
 
 #define CP437_SMILEY_FACE_CHAR 0x01
 #define BRIGHT_GREEN_TEX_ON_BLACK_BACKGROUND 0x0A;
@@ -100,11 +101,28 @@ main (int argc, char **argv)
 
   ConsolePrintf("\n\rSwitching to VGA graphics mode...\n\r");
 
+  // Snapshot right before the switch (not the earlier current_cursor_position above, which is
+  // stale by now - several more ConsolePrintf calls have moved the cursor since it was captured).
+  int cursor_before_graphics = get_vga_cursor();
+
   // Switch to VGA graphics code using code in vgamode.c
   int mode_switching_result = init_graph_vga(320, 200, 1);
 
   if (mode_switching_result == 1) {
     ConsolePrintf("Switch to VGA graphics mode successful. (This text might not even be readable.)\n\r");
+
+    const int delay_before_text_mode_restore_in_seconds = 5;
+    delay(delay_before_text_mode_restore_in_seconds * 1000);
+
+    // Restore 80x25 text mode before exiting, so the console is usable again without a VM reset
+    // (set_text_mode() from modes.c) - see docs/qemu-vm-debugging.md's "Existing groundwork" note.
+    set_text_mode(0);
+
+    // set_text_mode()'s canned CRTC register table hardcodes the cursor-location registers to a
+    // fixed value, stomping wherever NetWare's own console had it (its prompt). Put it back.
+    set_vga_cursor(cursor_before_graphics);
+
+    ConsolePrintf("\rRestored 80x25 text mode.\n\r");
   } else {
     ConsolePrintf("Switch to VGA graphics mode failed.\n\r");
   }

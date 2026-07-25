@@ -270,12 +270,15 @@ the guest is responsive).
 - `README.md` has links for manually installing/running NetWare 3.12 in a VM (VirtualBox-based) —
   useful as an install/config reference even though the target here is QEMU. The current
   `vm-images/netware-3x.qcow2` was itself converted from a confirmed-working VirtualBox VDI.
-- Worth doing in the NLM *before* relying on automation for graphics-mode tests: restore 80×25
-  text mode before exiting (e.g. `set_text_mode()` in `modes.c`, or reprogram the registers back).
-  After a graphics-mode test the server only *looks* hung — the console keeps running and writing
-  to the invisible text buffer (observed 2026-07-19) — but without the restore, every automated
-  graphics test would end in a VM reset instead of a clean next iteration. Not yet done; matters
-  now that `vmctl floppy load` (above) can get a graphics-mode test onto the VM.
+- **Text-mode restore on exit: done (2026-07-25).** `hello_old.c` now `#include`s `modes.c` for
+  its `set_text_mode(0)` and calls it after a 5-second view of the 320×200 graphics mode, right
+  before returning — boot-verified via `pmemsave` of `0xB8000` showing "Restored 80x25 text mode."
+  and a clean console prompt afterward, no VM reset needed. `set_text_mode()`'s canned CRTC
+  register table also hardcodes the cursor-location registers, stomping wherever NetWare's own
+  console prompt had the cursor; fixed by snapshotting the cursor (`get_vga_cursor()`, already in
+  `hello_old.c`) immediately before the graphics switch and restoring it (`set_vga_cursor()`)
+  right after `set_text_mode(0)` — boot-verified the cursor lands back exactly where it was.
+  `hello.nlm` never switches modes, so it doesn't need any of this.
 
 ## Considered and rejected: Vagrant
 

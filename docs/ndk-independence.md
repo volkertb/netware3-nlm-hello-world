@@ -60,8 +60,8 @@ Three layers, cleanly separable:
      interrupt-registration exports (research; drivers do it, so the mechanism exists);
    - sound: Adlib (pure port I/O — easiest), Sound Blaster (port I/O + DMA controller
      programming + IRQ hook); QEMU emulates both, so the sidecar can exercise sound;
-   - restore text mode on exit (see [qemu-vm-debugging.md](qemu-vm-debugging.md)) so the server
-     stays usable.
+   - restore text mode on exit (done 2026-07-25, see [qemu-vm-debugging.md](qemu-vm-debugging.md))
+     so the server stays usable.
 
 ## Choosing the mini-libc (assessed 2026-07-19)
 
@@ -108,7 +108,6 @@ Link as a static `libc.a` listed in the `.def`.
 
 ## Suggested sequencing
 
-QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC) and direct-hardware graphics are
-done — see [qemu-vm-debugging.md](qemu-vm-debugging.md). Next: text-mode restore on exit (makes
-interactive/automated testing sane after a graphics-mode NLM) → tier 1+2 (NDK-free, verified by
-sidecar boots) → mini-libc port → sound.
+QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC), direct-hardware graphics, and
+text-mode restore on exit are all done — see [qemu-vm-debugging.md](qemu-vm-debugging.md). Next:
+tier 1+2 (NDK-free, verified by sidecar boots) → mini-libc port → sound.
