@@ -1,6 +1,7 @@
 #
 # hello.def - NLM Header definition file for nlmconv(1)
 # Copyright (c) 2000 Martin Hinner <martin@hinner.info>
+# Copyright (c) 2025 Volkert de Buisonjé
 #
 
 # define startup object files

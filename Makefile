@@ -7,7 +7,7 @@ CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tables -Wall -O2 -g -I/usr/nwsdk
 
 all:		floppy.img
 
-floppy.img: hello.nlm helloold.nlm
+floppy.img: hello.nlm hellovga.nlm
 	dd if=/dev/zero of=floppy.img bs=1440k count=1
 	mformat -C -f 1440 -i floppy.img ::
 	mcopy -i floppy.img *.nlm ::
@@ -17,10 +17,10 @@ hello.nlm:	hello.o vga_util.o hello.def
 	nlmconv --output-target=nlm32-i386 -T hello.def
 	verify-nlm hello.nlm hello.def
 
-helloold.nlm:	hello_old.o hello_old.def
-	nlmconv --output-target=nlm32-i386 -T hello_old.def
-	verify-nlm hello_old.nlm hello_old.def
-	mv hello_old.nlm helloold.nlm
+hellovga.nlm:	hello_vga.o hello_vga.def
+	nlmconv --output-target=nlm32-i386 -T hello_vga.def
+	verify-nlm hello_vga.nlm hello_vga.def
+	mv hello_vga.nlm hellovga.nlm
 
 hello.o:	hello.c
 	sed "s/INSERT_TIMESTAMP_HERE/$$(date)/g" hello.c > hello.tmp.c
@@ -28,11 +28,11 @@ hello.o:	hello.c
 	mv hello.tmp.o hello.o
 	rm hello.tmp.c
 
-hello_old.o:	hello_old.c
-	sed "s/INSERT_TIMESTAMP_HERE/$$(date)/g" hello_old.c > hello_old.tmp.c
-	$(CC) $(CFLAGS) -c hello_old.tmp.c
-	mv hello_old.tmp.o hello_old.o
-	rm hello_old.tmp.c
+hello_vga.o:	hello_vga.c
+	sed "s/INSERT_TIMESTAMP_HERE/$$(date)/g" hello_vga.c > hello_vga.tmp.c
+	$(CC) $(CFLAGS) -c hello_vga.tmp.c
+	mv hello_vga.tmp.o hello_vga.o
+	rm hello_vga.tmp.c
 
 vga_util.o:	vga_util.c
 	$(CC) $(CFLAGS) -c vga_util.c

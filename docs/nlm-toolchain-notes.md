@@ -32,7 +32,7 @@ Mechanism, two layers:
    compilers didn't emit it).
 
 **Closure, 2026-07-19, two boots of NetWare 3.12 in a VM:** both NLMs run end-to-end, including
-`helloold.nlm`'s 320×200 VGA switch via direct register programming — the exact operation that
+`hellovga.nlm`'s 320×200 VGA switch via direct register programming — the exact operation that
 used to abend ([screenshot](images/netware312-vga-mode13h-2026-07-19.png); the pixel noise is old
 text-buffer data reinterpreted as pixels — success, nothing clears VRAM yet). Direct video memory
 access (`0xA0000`/`0xB8000`) and `inp`/`outp` all work from a plain NLM; the IOPL theory is dead.
@@ -110,7 +110,7 @@ target — no separate THREADS.NLM exists there.
 
 ## `TYPE`: 0 vs 9, and `OS_DOMAIN` (corrected 2026-07-25)
 
-`hello_old.def` uses `TYPE 0` (Ordinary NLM), `hello.def` uses `TYPE 9` (Custom device module) —
+`hello_vga.def` uses `TYPE 0` (Ordinary NLM), `hello.def` uses `TYPE 9` (Custom device module) —
 both boot-verified; the distinction doesn't matter for a console-only NLM like either of these.
 
 `OS_DOMAIN` is **active** (uncommented) in both `.def` files, not dead weight: both NLMs do direct

@@ -7,7 +7,7 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
 ## Build & verify
 
 - `make` (repo root) builds two NLMs — `hello.nlm` (console output + text-buffer writes) and
-  `helloold.nlm` (320×200 VGA graphics-mode switch, then restores 80×25 text mode before exiting)
+  `hellovga.nlm` (320×200 VGA graphics-mode switch, then restores 80×25 text mode before exiting)
   — deep-verifies each with `verify-nlm` (byte-checks every relocation and the NLM header, so
   toolchain corruption cannot slip through), and packs both into `floppy.img` via `mtools`. Works
   only inside the devcontainer (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).

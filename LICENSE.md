@@ -25,12 +25,12 @@ From the `README`:
 
 Copyright 2025, Volkert de Buisonjé, released under the Apache License 2.0.
 
-## NLM sources in the repo root (hello.c, hello_old.c, *.def, Makefile)
+## NLM sources in the repo root (hello.c, hello_vga.c, *.def, Makefile)
 
 Derived from Martin Hinner's nlm-samples "hello" (LGPLv2, see above), substantially modified by
 Volkert de Buisonjé.
 
-## VGA mode-setting code (vgamode.c, nlm_io_wrapper.c, putpixel in hello_old.c)
+## VGA mode-setting code (vgamode.c, nlm_io_wrapper.c, putpixel in hello_vga.c)
 
 Copied/adapted from osdev.org forum posts and the OSDev wiki's "Drawing In a Linear Framebuffer"
 page; exact source URLs are kept in the file headers. The forum posts state no explicit license,
