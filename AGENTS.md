@@ -53,5 +53,9 @@ upstream after 2.31.
   add verbose restatements of the command above them.
 - Verify non-obvious technical claims (tool support, dependency behavior) against a primary source
   before stating them as fact, rather than from memory or a search summary.
+- After creating/editing a `.devcontainer/**` shell or Python script, run shellcheck / `ruff check`
+  / `pylint` / `python3 -m py_compile` on it (config: `.devcontainer/pyproject.toml`) — same tools
+  the Dockerfile's SCA gate enforces at build time. Not the C/NLM code under test — no linting set
+  up there yet.
 - Use Conventional Commits (`type: description` + explanatory body).
 - See [docs/agents-md-style-guide.md](docs/agents-md-style-guide.md) before editing this file.

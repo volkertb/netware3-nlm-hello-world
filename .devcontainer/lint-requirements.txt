@@ -1,0 +1,6 @@
+# Static analysis for this project's own shell/Python setup scripts (not the C/NLM code under
+# test - see AGENTS.md). Versions pinned for reproducibility, matching this repo's general
+# pin-everything convention.
+ruff==0.16.0
+pylint==4.0.6
+pip-audit==2.10.1

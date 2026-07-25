@@ -12,7 +12,7 @@
   // Mirrors workspaceFolder into the container's own environment (verified: for Compose-based
   // devcontainers the CLI bakes containerEnv into a real Compose `environment:` override at
   // bring-up, not a per-exec injection - devcontainers/cli src/spec-node/dockerCompose.ts). Lets
-  // vmctl (.devcontainer/qemu/vmctl) resolve the workspace path from this one property instead
+  // vmctl (.devcontainer/qemu/vmctl.sh) resolve the workspace path from this one property instead
   // of hardcoding it a second time - a rename only needs editing workspaceFolder above.
   "containerEnv": {
     "WORKSPACE_FOLDER": "${containerWorkspaceFolder}"

@@ -276,7 +276,7 @@ COPY --chmod=755 verify_nlm.py /usr/local/bin/verify-nlm
 # QEMU sidecar control clients (docs/qemu-vm-debugging.md) - same PATH-install pattern as
 # verify-nlm above, so `vmctl`/`qmp` work from any directory instead of needing a repo-relative
 # path. Only the client side lives here; qemu/Dockerfile builds the sidecar itself.
-COPY --chmod=755 qemu/vmctl /usr/local/bin/vmctl
+COPY --chmod=755 qemu/vmctl.sh /usr/local/bin/vmctl
 COPY --chmod=755 qemu/qmp.py /usr/local/bin/qmp
 
 # Keep apt's downloaded .deb files and package lists in cache mounts across builds, instead of
@@ -339,13 +339,46 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Isolated venv for qmp's Python dependencies (qemu/requirements.txt) - Debian 13's system python3
 # is PEP 668 "externally managed", so a venv avoids needing --break-system-packages. Put on PATH
 # ahead of the system python3 so `qmp`'s ordinary `#!/usr/bin/env python3` shebang resolves here,
-# keeping the script itself free of any environment-specific path.
+# keeping the script itself free of any environment-specific path. requirements.txt is kept around
+# (not rm'd here) for the pip-audit run further below.
 COPY qemu/requirements.txt /tmp/qmp-requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     python3 -m venv /opt/qmp-venv \
-    && /opt/qmp-venv/bin/pip install -r /tmp/qmp-requirements.txt \
-    && rm /tmp/qmp-requirements.txt
+    && /opt/qmp-venv/bin/pip install -r /tmp/qmp-requirements.txt
 ENV PATH="/opt/qmp-venv/bin:$PATH"
+
+# Second, separate venv for linting/SCA tools (ruff, pylint, pip-audit) - kept apart from qmp-venv
+# above since these are dev-time tooling, not a runtime dependency of any installed script.
+COPY lint-requirements.txt /tmp/lint-requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    python3 -m venv /opt/lint-venv \
+    && /opt/lint-venv/bin/pip install -r /tmp/lint-requirements.txt
+ENV PATH="/opt/lint-venv/bin:$PATH"
+
+# SCA/linting gate for this project's own shell + Python setup/tooling scripts - NOT the C/NLM
+# code under test, a separate concern (see AGENTS.md). Copies the whole build context
+# (.dockerignore still excludes download_cache/) and recursively finds every *.sh/*.py under it,
+# rather than naming files individually, so new scripts added anywhere under .devcontainer/ later
+# are picked up automatically with no Dockerfile change needed. Copied here (rather than linting
+# the renamed /usr/local/bin/* installs above) so ruff/pylint see the `.py` suffix they expect.
+# postCreate.local.sh (gitignored, optional) is swept in and linted too when a developer has
+# created one locally - harmlessly absent otherwise, since find just returns nothing for it.
+# pyproject.toml (part of the wholesale copy) holds the ruff/pylint config, calibrated to this
+# project's terse, docstring-light comment style - both tools auto-discover it from the working
+# directory below, no explicit --config/--rcfile needed. Fails the build on any finding, same as
+# verify-nlm does for NLM correctness further below.
+COPY . /tmp/lint-src/
+RUN cd /tmp/lint-src \
+    && sh_files=$(find . -type f -name '*.sh') \
+    && py_files=$(find . -type f -name '*.py') \
+    && { [ -n "$sh_files" ] || { echo 'lint gate found no shell scripts - check the find pattern' >&2; exit 1; }; } \
+    && { [ -n "$py_files" ] || { echo 'lint gate found no Python scripts - check the find pattern' >&2; exit 1; }; } \
+    && shellcheck $sh_files \
+    && python3 -m py_compile $py_files \
+    && ruff check $py_files \
+    && pylint $py_files \
+    && pip-audit -r /tmp/qmp-requirements.txt -r /tmp/lint-requirements.txt \
+    && rm -rf /tmp/lint-src /tmp/qmp-requirements.txt /tmp/lint-requirements.txt
 
 # Copy the NLM samples from the builder stage and make them available to the non-root user for the test build below
 COPY --from=builder /Downloads/nlm-samples /home/$USERNAME/Downloads/nlm-samples

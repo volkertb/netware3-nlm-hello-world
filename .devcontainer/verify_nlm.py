@@ -231,7 +231,8 @@ def main():
             image_fileoff = images[".text" if site_image == "code" else ".data"][0]
             for r in elf.relocations(rel_idx):
                 sym = syms[r["sym"]]
-                where = f"{elf.sections[target_idx]['name']}+{r['offset']:#x} ({sym['name'] or '<section>'})"
+                sec_name = elf.sections[target_idx]["name"]
+                where = f"{sec_name}+{r['offset']:#x} ({sym['name'] or '<section>'})"
                 addend = elf.u32(target_idx, r["offset"])
                 site = site_base + r["offset"]
                 actual = struct.unpack_from("<I", nlm, image_fileoff + site)[0]
