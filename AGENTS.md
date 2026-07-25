@@ -13,7 +13,7 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
   (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
 - `*.def` files are the NLM header/link definitions consumed by `nlmconv`.
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
-  3.11/3.12. The QEMU sidecar (`vmctl on|off|reset|status|screendump|floppy load|eject`,
+  3.11/3.12. The QEMU sidecar (`vmctl on|off|reset|status|screendump|floppy load|eject|type|vnc`,
   [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) boots/stops the VM and gets
   `floppy.img` into it (`vmctl floppy load`) — boot-verified 2026-07-25. Last
   full boot verification: 2026-07-19, both NLMs work, including the graphics switch that used to
@@ -35,11 +35,12 @@ upstream after 2.31.
 
 ## Planned work
 
-1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown,
-   floppy `load`/`eject`, and keyboard injection all boot-verified as of 2026-07-25 (`vmctl
-   on|off|reset|status|screendump|floppy load|eject|type`, `qmp <command>`) — confirmed
-   end-to-end with `vmctl type` loading `HELLO.NLM` off a floppy `vmctl floppy load` inserted.
-   Only VNC (human-facing live view) remains open.
+1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown, floppy
+   `load`/`eject`, keyboard injection, and VNC all boot-verified as of 2026-07-25 (`vmctl
+   on|off|reset|status|screendump|floppy load|eject|type|vnc`, `qmp <command>`) — confirmed
+   end-to-end with `vmctl type` loading `HELLO.NLM` off a floppy `vmctl floppy load` inserted, and
+   with `vmctl vnc`'s live view surviving `reset`/`off`/`on` with correct auto-reconnect. Only
+   automatic hang/crash detection remains open.
 2. NDK independence and game platform ([docs/ndk-independence.md](docs/ndk-independence.md)) —
    drop the proprietary NDK (its real build-time surface is one 892-byte glue object plus one
    prototype), then a picolibc-based runtime for low-level/game NLM development.
@@ -57,5 +58,17 @@ upstream after 2.31.
   / `pylint` / `python3 -m py_compile` on it (config: `.devcontainer/pyproject.toml`) — same tools
   the Dockerfile's SCA gate enforces at build time. Not the C/NLM code under test — no linting set
   up there yet.
+- Before reading the NetWare VM's console, check its mode first: `vmctl screendump`, read just the
+  PPM header (`P6\n<width> <height>\n255\n`) — 720×400 is text, 320×200 is mode 13h graphics (no
+  QMP mode-query command exists; this is why). Text → follow up with `pmemsave` of `0xB8000`
+  (exact characters, no OCR). Graphics → the screendump itself, via `pnmtopng`. Guessing from
+  "what ran last" is wrong after a graphics-mode test — the console only *looks* hung, it's still
+  running, just not in text mode. The same header read is also how to verify a mode switch itself
+  worked, whenever that's the actual functionality under test (e.g. an NLM that's supposed to
+  switch to a graphics mode) — expected-vs-actual resolution is a precise pass/fail, not just a
+  read-tool choice. Full detail: [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md).
+- "Rebuild Container" never rebuilds/recreates the `qemu` sidecar, only `dev`. After a "rebuilt"
+  claim, verify a `.devcontainer/qemu/**` edit actually took effect (e.g. a QMP-visible check)
+  before trusting it. Fix needs host `docker`/`podman`, unavailable here: [docs/devcontainer.md](docs/devcontainer.md).
 - Use Conventional Commits (`type: description` + explanatory body).
 - See [docs/agents-md-style-guide.md](docs/agents-md-style-guide.md) before editing this file.

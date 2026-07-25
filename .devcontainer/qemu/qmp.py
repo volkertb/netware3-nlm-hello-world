@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/opt/qmp-venv/bin/python3
 """Minimal QMP client for the NetWare QEMU sidecar. Installed on PATH as `qmp`.
 
 Usage: qmp <command> [key=value ...]

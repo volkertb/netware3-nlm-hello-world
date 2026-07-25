@@ -22,6 +22,7 @@ usage() {
     echo "usage: $(basename "$0") on|off|reset|status|screendump [name.ppm]" >&2
     echo "       $(basename "$0") floppy load [image] | floppy eject | floppy status" >&2
     echo "       $(basename "$0") type <text>" >&2
+    echo "       $(basename "$0") vnc" >&2
     exit 2
 }
 
@@ -42,6 +43,14 @@ case "$1" in
             usage
         fi
         qmp type "$text"
+        ;;
+    vnc)
+        # Just prints the URL - it opens on the Docker/Podman HOST's browser (where docker-compose.yml
+        # publishes noVNC's port to loopback), not reachable from inside this dev container itself.
+        # autoconnect/reconnect/reconnect_delay are real noVNC vnc.html query params (see
+        # docs/qemu-vm-debugging.md's "VNC" section) - the page reconnects on its own after
+        # `vmctl reset`/off+on, no manual reload needed.
+        echo "http://localhost:6080/vnc.html?autoconnect=true&reconnect=true&reconnect_delay=2000"
         ;;
     screendump)
         name=${2:-screendump.ppm}

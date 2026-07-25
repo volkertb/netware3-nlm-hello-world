@@ -337,15 +337,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt -y install --no-install-recommends python3 python3-venv xxd file bsdextrautils qemu-utils socat jq ripgrep shellcheck strace netpbm
 
 # Isolated venv for qmp's Python dependencies (qemu/requirements.txt) - Debian 13's system python3
-# is PEP 668 "externally managed", so a venv avoids needing --break-system-packages. Put on PATH
-# ahead of the system python3 so `qmp`'s ordinary `#!/usr/bin/env python3` shebang resolves here,
-# keeping the script itself free of any environment-specific path. requirements.txt is kept around
-# (not rm'd here) for the pip-audit run further below.
+# is PEP 668 "externally managed", so a venv avoids needing --break-system-packages.
+# requirements.txt is kept around (not rm'd here) for the pip-audit run further below.
 COPY qemu/requirements.txt /tmp/qmp-requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     python3 -m venv /opt/qmp-venv \
     && /opt/qmp-venv/bin/pip install -r /tmp/qmp-requirements.txt
-ENV PATH="/opt/qmp-venv/bin:$PATH"
 
 # Second, separate venv for linting/SCA tools (ruff, pylint, pip-audit) - kept apart from qmp-venv
 # above since these are dev-time tooling, not a runtime dependency of any installed script.

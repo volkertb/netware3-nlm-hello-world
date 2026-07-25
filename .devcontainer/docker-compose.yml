@@ -45,13 +45,24 @@ services:
       - ../shared:/vm/shared
     networks:
       - sidecar-net
-    # No `ports:` here - deliberately. QMP (4444: VM control - reset/quit/screendump/generic QMP)
-    # and the supervisor's own control port (4445: power on/off) are reachable ONLY from `dev`,
-    # over the private `sidecar-net` network below, by service name (qemu:4444, qemu:4445).
-    # QMP has NO authentication of its own: anything that can open that TCP port has full
-    # control of the VM. Do not add a `ports:` mapping for either port - that would expose VM
-    # control to anything that can reach this host. When VNC lands for the human-facing view, IT
-    # is the one port that gets published on purpose (a read/interact surface, not raw QMP).
+    # QMP (4444: VM control - reset/quit/screendump/generic QMP) and the supervisor's own control
+    # port (4445: power on/off) are reachable ONLY from `dev`, over the private `sidecar-net`
+    # network, by service name (qemu:4444, qemu:4445) - QMP has NO authentication of its own, so
+    # publishing either would hand VM control to anything that can reach this host. Never add a
+    # `ports:` mapping for them. Raw VNC (5900) is loopback-bound *inside this container* for the
+    # same reason (see vm-supervisor.sh) and is never published either - novnc_server, in the same
+    # container, is the only thing that connects to it.
+    #
+    # 6080 (noVNC's web UI + WebSocket-to-VNC proxy) is the one port meant to reach the host - see
+    # docs/qemu-vm-debugging.md's "VNC" section for the recipe. Bound to the Docker/Podman host's
+    # own loopback interface, not 0.0.0.0: no VNC password/TLS is configured (this network
+    # boundary is the control, same reasoning as QMP above), so this is what keeps it from being
+    # reachable by anything beyond that host. On Docker Desktop (macOS/Windows), where containers
+    # run inside an internal VM, whether this loopback binding is enforced all the way through to
+    # the real host's own network stack is unconfirmed - verify empirically on that platform
+    # rather than assume.
+    ports:
+      - "127.0.0.1:6080:6080"
 
 networks:
   sidecar-net:

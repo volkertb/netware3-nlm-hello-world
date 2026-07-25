@@ -53,9 +53,9 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    and debugging/analysis tools (python3, xxd, file, bsdextrautils, qemu-utils, socat, jq,
    ripgrep, shellcheck, strace, netpbm — `--no-install-recommends`; `qemu-system-x86` deliberately
    absent, the VM runs in a sidecar); installs `qmp`'s Python dependencies
-   (`.devcontainer/qemu/requirements.txt`) into an isolated venv (`/opt/qmp-venv`, on `PATH` ahead
-   of the system python3 — see [qemu-vm-debugging.md](qemu-vm-debugging.md)); creates non-root
-   `dev-container-user`; installs Claude Code
+   (`.devcontainer/qemu/requirements.txt`) into an isolated venv (`/opt/qmp-venv`, referenced
+   directly by `qmp`'s shebang — see [qemu-vm-debugging.md](qemu-vm-debugging.md)); creates
+   non-root `dev-container-user`; installs Claude Code
    natively (`curl -fsSL https://claude.ai/install.sh | bash` — the npm-based devcontainer
    Feature left a root-owned leftover that broke auto-updates); repeats the sample-NLM build as
    the non-root user and gates it with `verify-nlm` (installed from `.devcontainer/verify_nlm.py`
@@ -186,6 +186,16 @@ Doing this later means another one-time `podman volume` copy, same as this one.
   `dev-container-user` can't write to it. Kept as a separate file because `keep-id` is
   Podman-specific — Docker's `userns_mode` only supports `"host"`, so merging this unconditionally
   would likely hard-error under real Docker; a Docker user's fix is deleting one array entry.
+- **"Rebuild Container" never rebuilds or recreates the `qemu` sidecar** — confirmed from
+  `devcontainers/cli` source (`src/spec-node/dockerCompose.ts`): the container lookup that decides
+  whether to remove-and-recreate on rebuild is scoped to `config.service` (`dev`) alone, and the
+  `--no-recreate` flag it then adds to `docker compose up` applies project-wide, so `qemu` is left
+  running its old container even though its image gets rebuilt underneath it. No devcontainer.json
+  property changes this — it's a hardcoded CLI assumption, not something `runServices` or similar
+  affects. After editing anything under `.devcontainer/qemu/` (its `Dockerfile`, `vm-supervisor.sh`,
+  etc.), manually rebuild and recreate it: `docker compose -f .devcontainer/docker-compose.yml
+  build qemu && docker compose -f .devcontainer/docker-compose.yml up -d --force-recreate --no-deps
+  qemu` (swap `docker` for `podman` on Podman). A plain "Rebuild Container" alone is not enough.
 
 ## `~/.local/bin` on `PATH`
 

@@ -19,6 +19,12 @@ STATE_FILE=/run/vm.state
 PID_FILE=/run/qemu.pid
 QMP_PORT=4444
 CTL_PORT=4445
+# QEMU's -vnc host:d syntax takes a display number, not a port - the port is always 5900+d.
+# Deriving VNC_PORT from VNC_DISPLAY keeps that relationship explicit instead of two independent
+# magic numbers that could drift apart.
+VNC_DISPLAY=0
+VNC_PORT=$((5900 + VNC_DISPLAY))
+NOVNC_PORT=6080
 SELF=/usr/local/bin/vm-supervisor.sh
 
 mkdir -p "$LOGDIR" "$FLOPPYDIR"
@@ -39,10 +45,10 @@ start_qemu() {
         return 0
     fi
     # -machine pc + if=ide matches the PIIX3/IDE chipset the disk was installed against under
-    # VirtualBox. -display none + -nic none: headless MVP, no VNC/network yet. accel=kvm:tcg
-    # must be a `-machine` property, not the standalone `-accel` flag (rejected outright), and
-    # -m 16 matches the source VirtualBox VM's RAM exactly - more RAM broke NetWare's own loader.
-    # Both bugs and how they were diagnosed: docs/qemu-vm-debugging.md ("Two real bugs").
+    # VirtualBox. -nic none: no network needed. accel=kvm:tcg must be a `-machine` property, not
+    # the standalone `-accel` flag (rejected outright), and -m 16 matches the source VirtualBox
+    # VM's RAM exactly - more RAM broke NetWare's own loader. Both bugs and how they were
+    # diagnosed: docs/qemu-vm-debugging.md ("Two real bugs").
     #
     # -device floppy,id=floppy0 with no drive= boots an empty, addressable floppy tray (verified
     # against QEMU 10.0.0 source: hw/block/fdc.c's floppy_drive_realize() falls back to
@@ -51,11 +57,23 @@ start_qemu() {
     # QMP. -boot order=c pins boot to the hard disk only, so an inserted data floppy can never
     # get picked up as a boot device on a reset.
     #
+    # -vnc 127.0.0.1:0: loopback-only inside THIS container - novnc_server (started below) is the
+    # only thing that connects to it; nothing on sidecar-net can reach raw, unauthenticated VNC
+    # directly. vmport=on (a -machine property) makes the `pc` machine auto-create and wire up a
+    # `vmmouse` PS/2 device (verified against QEMU 10.0.0 source: hw/i386/pc.c's
+    # pc_superio_init() creates TYPE_VMPORT + "vmmouse" and links it to the i8042 controller
+    # whenever vmport is enabled - no separate -device flag needed). NetWare/DOS-era guests have
+    # no USB stack (ruling out -device usb-tablet), but vmmouse's absolute-position protocol is a
+    # legacy PS/2-port extension a period-correct DOS driver can use directly - not wired up to
+    # anything guest-side yet, but there for whenever a driver like vbados's VBMOUSE.EXE
+    # (https://git.javispedro.com/cgit/vbados.git/about/, confirmed vmmouse-compatible) gets
+    # tried, to avoid VNC's usual relative-mouse cursor drift.
+    #
     # stdout/stderr appended to the shared logs dir rather than left on the container's own
     # stdout: the dev container has no podman/docker access to read `podman logs` itself, so
     # this file is its only window onto why a start attempt failed.
     qemu-system-i386 \
-        -machine pc,accel=kvm:tcg \
+        -machine pc,accel=kvm:tcg,vmport=on \
         -cpu pentium \
         -m 16 \
         -boot order=c \
@@ -63,7 +81,7 @@ start_qemu() {
         -device floppy,id=floppy0 \
         -qmp tcp:0.0.0.0:$QMP_PORT,server=on,wait=off \
         -serial file:"$LOGDIR"/serial.log \
-        -display none \
+        -vnc 127.0.0.1:$VNC_DISPLAY \
         -nic none >>"$LOGDIR"/qemu-stdouterr.log 2>&1 &
     echo $! > "$PID_FILE"
 }
@@ -132,6 +150,13 @@ case "${1:-run}" in
         # and nothing else.
         socat TCP-LISTEN:$CTL_PORT,reuseaddr,fork \
             SYSTEM:"read line; $SELF apply \"\$line\"" &
+        # noVNC's web UI + WebSocket-to-raw-VNC proxy, started once and unconditionally - not
+        # gated on the VM being on, so the page stays reachable (just failing to connect) even
+        # while the VM is off. A connection attempt against a not-yet-up QEMU just fails; noVNC's
+        # own client-side reconnect (vnc.html's ?reconnect=true&reconnect_delay=... - see
+        # docs/qemu-vm-debugging.md) retries with no extra scripting needed here.
+        novnc_server --vnc 127.0.0.1:$VNC_PORT --listen 0.0.0.0:$NOVNC_PORT \
+            --web /usr/share/novnc >>"$LOGDIR"/novnc.log 2>&1 &
         # Reconciliation loop: desired state in $STATE_FILE vs the actual QEMU process. This is
         # what makes "power back on after off" possible without restarting this container.
         while true; do
