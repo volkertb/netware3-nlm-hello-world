@@ -58,7 +58,7 @@ def fail(msg):
 
 def parse_def(def_path):
     inputs, stack = [], None
-    for line in Path(def_path).read_text().splitlines():
+    for line in Path(def_path).read_text(encoding="utf-8").splitlines():
         # Keyword/argument separators may be tabs (the nlm-samples .def uses
         # them), and vintage files are CRLF; split on any whitespace.
         fields = line.split("#", 1)[0].split()
@@ -102,7 +102,7 @@ class Elf32:
         symtab = self.sections[symtab_index]
         strtab = self.sections[symtab["link"]]
         for off in range(symtab["offset"], symtab["offset"] + symtab["size"], 16):
-            st_name, st_value, st_size, st_info, _, st_shndx = struct.unpack_from(
+            st_name, st_value, _st_size, _st_info, _, st_shndx = struct.unpack_from(
                 "<IIIBBH", self.data, off
             )
             yield {"name": self._cstr(strtab["offset"] + st_name),
@@ -133,7 +133,7 @@ def nlm_section_table(nlm_path):
     table = {}
     for m in re.finditer(
         r"^\s*\d+\s+(\.\w+)\s+([0-9a-f]{8})\s+[0-9a-f]{8}\s+[0-9a-f]{8}\s+([0-9a-f]{8})",
-        out, re.M,
+        out, re.MULTILINE,
     ):
         table.setdefault(m.group(1), (int(m.group(3), 16), int(m.group(2), 16)))
     return table  # name -> (file_offset, size)

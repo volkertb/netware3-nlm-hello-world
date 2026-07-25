@@ -24,7 +24,10 @@ chords (e.g. ctrl+alt+delete), not a way to type a string in one call.
 import json
 import sys
 
-from qemu.qmp.legacy import QEMUMonitorProtocol
+# pylint/astroid can't resolve this: qemu.qmp ships as a PEP 420 implicit namespace package (no
+# qemu/__init__.py, by design - it lets qemu.qmp/qemu.machine/etc. coexist), which is a
+# long-standing astroid limitation, not a real missing import - it resolves fine at runtime.
+from qemu.qmp.legacy import QEMUMonitorProtocol  # pylint: disable=import-error,no-name-in-module
 
 HOST = "qemu"
 PORT = 4444

@@ -4,3 +4,7 @@
 ruff==0.16.0
 pylint==4.0.6
 pip-audit==2.10.1
+# pylint (unlike ruff) does real import resolution, so it needs qmp.py's own runtime dependency
+# importable here too, even though it's a separate concern from lint-venv's own tools - see
+# qemu/requirements.txt for the pin this mirrors.
+qemu.qmp==0.0.6
