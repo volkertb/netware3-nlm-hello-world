@@ -1,0 +1,5 @@
+# For qmp (installed to /usr/local/bin/qmp from qmp.py in this directory) - the QEMU project's
+# own maintained QMP client library. Version pinned for reproducibility, matching this repo's
+# general pin-everything convention (exact Debian point releases, exact source tarball checksums
+# elsewhere in the Dockerfile). https://pypi.org/project/qemu.qmp/
+qemu.qmp==0.0.6

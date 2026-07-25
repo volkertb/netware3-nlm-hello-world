@@ -52,7 +52,10 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
    `/usr/nwsdk`, `/usr/bin/nlmimp` from `builder`; installs JetBrains dev-container prerequisites
    and debugging/analysis tools (python3, xxd, file, bsdextrautils, qemu-utils, socat, jq,
    ripgrep, shellcheck, strace, netpbm — `--no-install-recommends`; `qemu-system-x86` deliberately
-   absent, the VM runs in a sidecar); creates non-root `dev-container-user`; installs Claude Code
+   absent, the VM runs in a sidecar); installs `qmp`'s Python dependencies
+   (`.devcontainer/qemu/requirements.txt`) into an isolated venv (`/opt/qmp-venv`, on `PATH` ahead
+   of the system python3 — see [qemu-vm-debugging.md](qemu-vm-debugging.md)); creates non-root
+   `dev-container-user`; installs Claude Code
    natively (`curl -fsSL https://claude.ai/install.sh | bash` — the npm-based devcontainer
    Feature left a root-owned leftover that broke auto-updates); repeats the sample-NLM build as
    the non-root user and gates it with `verify-nlm` (installed from `.devcontainer/verify_nlm.py`

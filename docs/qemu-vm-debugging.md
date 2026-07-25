@@ -76,6 +76,17 @@ Podman UID/permission alignment between the two containers' users — see
 That same reasoning ruled out a named volume for the floppy image below too — it's a host bind
 (`../shared:/vm/shared`) for the same UID-alignment reason, not a new decision.
 
+### `qmp`'s client library: `qemu.qmp`
+
+`qmp` (`.devcontainer/qemu/qmp.py`) talks QMP via `qemu.qmp` (PyPI, `qemu/requirements.txt`) — the
+QEMU project's own maintained client library, specifically its `legacy.QEMUMonitorProtocol` sync
+wrapper — rather than a hand-rolled socket/JSON-framing loop. Installed into an isolated venv
+(`/opt/qmp-venv`, `dev-env` Dockerfile stage) since Debian 13's system python3 is PEP 668
+"externally managed"; the venv is put on `PATH` ahead of the system python3 so `qmp`'s ordinary
+`#!/usr/bin/env python3` shebang resolves there, keeping the script itself free of any
+environment-specific path. Landed 2026-07-25; not yet boot-verified (needs a devcontainer rebuild
+to pick up the venv, same as any other Dockerfile change here).
+
 ### NetWare's console is VGA text, not serial
 
 `-serial file:/vm/shared/logs/serial.log` is wired up, but **stays empty** — NetWare 3.x writes

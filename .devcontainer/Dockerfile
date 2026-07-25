@@ -329,11 +329,23 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # custom format strings, e.g. extracting single NLM header fields), VM disk-image work (qemu-utils),
 # QMP scripting against the planned QEMU sidecar (python3, socat, jq — see docs/qemu-vm-debugging.md),
 # converting QMP screendumps (raw PPM) to PNG for visual inspection (netpbm's pnmtopng),
-# faster searching and script/syscall troubleshooting (ripgrep, shellcheck, strace).
+# faster searching and script/syscall troubleshooting (ripgrep, shellcheck, strace). python3-venv
+# for the qmp venv below.
 # --no-install-recommends because qemu-utils otherwise pulls in desktop-oriented Recommends.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt -y install --no-install-recommends python3 xxd file bsdextrautils qemu-utils socat jq ripgrep shellcheck strace netpbm
+    apt -y install --no-install-recommends python3 python3-venv xxd file bsdextrautils qemu-utils socat jq ripgrep shellcheck strace netpbm
+
+# Isolated venv for qmp's Python dependencies (qemu/requirements.txt) - Debian 13's system python3
+# is PEP 668 "externally managed", so a venv avoids needing --break-system-packages. Put on PATH
+# ahead of the system python3 so `qmp`'s ordinary `#!/usr/bin/env python3` shebang resolves here,
+# keeping the script itself free of any environment-specific path.
+COPY qemu/requirements.txt /tmp/qmp-requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    python3 -m venv /opt/qmp-venv \
+    && /opt/qmp-venv/bin/pip install -r /tmp/qmp-requirements.txt \
+    && rm /tmp/qmp-requirements.txt
+ENV PATH="/opt/qmp-venv/bin:$PATH"
 
 # Copy the NLM samples from the builder stage and make them available to the non-root user for the test build below
 COPY --from=builder /Downloads/nlm-samples /home/$USERNAME/Downloads/nlm-samples
