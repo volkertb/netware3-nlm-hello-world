@@ -84,3 +84,47 @@ void restore_vga_palette() {
     outp(VGA_DAC_DATA, saved_dac_palette[i]);
   }
 }
+
+/**
+ * Load a 256-entry RGB palette into the VGA DAC. rgb_palette holds 8-bit-per-channel values
+ * (the PCX/common convention); the DAC registers themselves are only 6 bits wide (0-63), hence
+ * the >>2. The DAC auto-increments its own index after every 3 writes to VGA_DAC_DATA, so one
+ * index write up front is enough.
+ */
+void set_vga_palette(const unsigned char *rgb_palette, int num_colors) {
+  int i;
+  outp(VGA_DAC_WRITE_INDEX, 0);
+  for (i = 0; i < num_colors * 3; i++) {
+    outp(VGA_DAC_DATA, rgb_palette[i] >> 2);
+  }
+}
+
+static const unsigned char black_palette[256 * 3] = {0};
+
+/**
+ * Fade the DAC linearly between black and target_rgb_palette (same 8-bit-per-channel convention
+ * as set_vga_palette). fade_in != 0 ramps black -> target over `steps` steps; 0 ramps the reverse.
+ * A whole-screen color change purely via palette writes - the pixel data underneath never moves.
+ */
+void fade_palette(const unsigned char *target_rgb_palette, int num_colors, int steps,
+                   int step_delay_ms, int fade_in) {
+  unsigned char scaled[256 * 3];
+  int step, i, level;
+  for (step = 0; step <= steps; step++) {
+    level = fade_in ? step : (steps - step);
+    for (i = 0; i < num_colors * 3; i++) {
+      scaled[i] = (unsigned char)((int)target_rgb_palette[i] * level / steps);
+    }
+    set_vga_palette(scaled, num_colors);
+    delay(step_delay_ms);
+  }
+}
+
+/**
+ * Force the DAC to black - useful right before drawing into a freshly mode-switched framebuffer,
+ * whose pixels would otherwise flash through whatever stale colors the DAC already held (e.g.
+ * from restore_vga_palette()'s counterpart, or leftover garbage) until a fade-in reaches them.
+ */
+void set_vga_palette_black() {
+  set_vga_palette(black_palette, 256);
+}
