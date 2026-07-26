@@ -60,20 +60,18 @@ first on the NDK/CLIB toolchain — this section describes redoing it on Track B
      server and may trip the CPU-hog watchdog. The loop must periodically call a yield export
      (`ThreadSwitch`/CLIB or the kernel's relinquish-control export — verify names for 3.x).
 3. **Direct hardware (the game's domain, already partly proven)**:
-   - graphics: VGA mode setting + VRAM writes work (boot-verified 2026-07-19);
+   - graphics: VGA mode setting, VRAM writes, DAC palette fade in/out, and picture display all
+     work (boot-verified); other VGA modes and Mode X are still open;
    - keyboard: port 0x60/0x64 polling *conflicts with the console's own handler* — either accept
      stolen keys on a dedicated "game console" box, or hook the keyboard IRQ via the kernel's
      interrupt-registration exports (research; drivers do it, so the mechanism exists);
    - sound: Adlib (pure port I/O — easiest), Sound Blaster (port I/O + DMA controller
-     programming + IRQ hook); QEMU emulates both, so the sidecar can exercise sound — **not yet
-     wired up**: `.devcontainer/qemu/vm-supervisor.sh`'s `qemu-system-i386` invocation currently has
-     no audio device or backend at all (no `-audiodev`, no `-device adlib`/`sb16`). Needed before
-     this experiment can boot-test anything: an `-audiodev` backend plus `-device
-     adlib,audiodev=<id>` (OPL2 at the standard 0x388) and, later, `-device
-     sb16,audiodev=<id>` (SB16 defaults matching a guest's usual `BLASTER=A220 I5 D1 H5 T6`);
-     `-machine pcspk-audiodev=<id>` separately if PC speaker output is ever wanted too;
-   - restore text mode on exit (done 2026-07-25, see [qemu-vm-debugging.md](qemu-vm-debugging.md))
-     so the server stays usable.
+     programming + IRQ hook) — **not started**; QEMU emulates both, but the sidecar's
+     `qemu-system-i386` invocation has no audio device or backend wired up yet at all (needs an
+     `-audiodev` backend, `-device adlib,audiodev=<id>` for OPL2 at 0x388, later `-device
+     sb16,audiodev=<id>`);
+   - restore text mode on exit (done, see [qemu-vm-debugging.md](qemu-vm-debugging.md)) so the
+     server stays usable.
 
 ## Choosing the mini-libc (assessed 2026-07-19)
 
@@ -120,13 +118,14 @@ Link as a static `libc.a` listed in the `.def`.
 
 ## Suggested sequencing
 
-QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC), direct-hardware graphics, and
-text-mode restore on exit are all done — see [qemu-vm-debugging.md](qemu-vm-debugging.md).
+QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC), direct-hardware graphics
+(mode switch, palette fade, picture display), and text-mode restore on exit are all done — see
+[qemu-vm-debugging.md](qemu-vm-debugging.md).
 
-**Track A, next up:** more graphics (other VGA modes, palette animation, Mode X) and sound (Adlib
-first — pure port I/O, easiest; Sound Blaster after — port I/O + DMA + IRQ), built and boot-tested
-the same way the VGA switch was, still on the existing NDK/CLIB toolchain. Keyboard IRQ hooking
-(see "Game platform" below) fits here too if it comes up before Track B.
+**Track A, next up:** sound (Adlib first, then Sound Blaster — see "Game platform" above for the
+QEMU-side gap that blocks it) and, lower priority, other VGA modes/Mode X, built and boot-tested
+the same way the graphics work was, still on the existing NDK/CLIB toolchain. Keyboard IRQ hooking
+(see "Game platform" above) fits here too if it comes up before Track B.
 
 **Track B, once Track A's experiments are done:** tier 1+2 (NDK-free, verified by sidecar boots)
 → mini-libc (picolibc) port → repeat Track A's graphics/sound experiments on the NDK-free stack

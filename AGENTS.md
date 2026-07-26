@@ -7,25 +7,19 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
 ## Build & verify
 
 - `make` (repo root) builds two NLMs — `hello.nlm` (console output + text-buffer writes) and
-  `hellovga.nlm` (320×200 VGA graphics-mode switch, then restores 80×25 text mode before exiting)
-  — deep-verifies each with `verify-nlm` (byte-checks every relocation and the NLM header, so
-  toolchain corruption cannot slip through), and packs both into `floppy.img` via `mtools`. Works
-  only inside the devcontainer (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
+  `hellovga.nlm` (320×200 VGA graphics-mode switch, fades an embedded picture in/out via DAC
+  palette ramping, then restores 80×25 text mode before exiting) — deep-verifies each with
+  `verify-nlm` (byte-checks every relocation and the NLM header, so toolchain corruption cannot
+  slip through), and packs both into `floppy.img` via `mtools`. Works only inside the devcontainer
+  (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
 - `*.def` files are the NLM header/link definitions consumed by `nlmconv`.
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
   3.11/3.12. `make deploy` builds if needed, starts the QEMU sidecar VM (idempotent), and mounts
   `floppy.img` into it — use this instead of running `vmctl on`/`vmctl floppy load` directly. The
-  sidecar itself (`vmctl on|off|reset|status|screendump|floppy load|eject|type|vnc`,
-  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) is boot-verified as of 2026-07-25,
-  including the text-mode restore — both NLMs work, including the graphics switch that used to
-  abend. Root cause of the 2025 abends was a toolchain relocation bug; every 2025-era theory
-  (IOPL, `TYPE 9`, `OS_DOMAIN`) is dead. History, mechanism, and the mandatory CFLAGS rules:
-  [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md). Separately: a real QEMU/KVM-level
-  crash (`KVM: entry failed, hardware error 0x0`, not an NLM abend) hit during 2026-07-26 testing,
-  initially suspected to be `hellovga.nlm`-specific but tracked down to a concurrently-running
-  VirtualBox VM on the host competing for VT-x — **don't run VirtualBox VMs alongside this
-  project's QEMU sidecar**. Full investigation: docs/qemu-vm-debugging.md's "Resolved: QEMU/KVM
-  entry-failure crash caused by a concurrent VirtualBox VM" section.
+  sidecar (`vmctl on|off|reset|status|screendump|floppy load|eject|type|vnc`,
+  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) is boot-verified, including the graphics
+  switch that used to abend — root cause was a toolchain relocation bug, not IOPL/`TYPE 9`/
+  `OS_DOMAIN` (all dead 2025-era theories): [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md).
 - `.devcontainer/build_and_fetch_floppy_image.sh` builds the container image standalone and
   copies `/nlm_disk.img` to `~/Downloads/`, without opening a devcontainer session.
 
@@ -42,11 +36,8 @@ upstream after 2.31.
 ## Planned work
 
 1. QEMU sidecar ([docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) — boot/shutdown, floppy
-   `load`/`eject`, keyboard injection, and VNC all boot-verified as of 2026-07-25 (`vmctl
-   on|off|reset|status|screendump|floppy load|eject|type|vnc`, `qmp <command>`) — confirmed
-   end-to-end with `vmctl type` loading `HELLO.NLM` off a floppy `vmctl floppy load` inserted, and
-   with `vmctl vnc`'s live view surviving `reset`/`off`/`on` with correct auto-reconnect. Only
-   automatic hang/crash detection remains open.
+   load/eject, keyboard injection, and VNC all boot-verified. Only automatic hang/crash detection
+   remains open.
 2. Game platform, two tracks ([docs/ndk-independence.md](docs/ndk-independence.md)) — Track A
    (current): graphics/sound experiments on the NDK/CLIB toolchain as-is, period-developer style.
    Track B (deferred): drop the proprietary NDK (its real build-time surface is one 892-byte glue
@@ -66,17 +57,20 @@ upstream after 2.31.
   / `pylint` / `python3 -m py_compile` on it (config: `.devcontainer/pyproject.toml`) — same tools
   the Dockerfile's SCA gate enforces at build time. Not the C/NLM code under test — no linting set
   up there yet.
-- Before reading the NetWare VM's console, check its mode first: `vmctl screendump`, read just the
-  PPM header (`P6\n<width> <height>\n255\n`) — 720×400 is text, 320×200 is mode 13h graphics (no
-  QMP mode-query command exists; this is why). Text → follow up with `pmemsave` of `0xB8000`
-  (exact characters, no OCR). Graphics → the screendump itself, via `pnmtopng`. Guessing from
-  "what ran last" is wrong after a graphics-mode test — the console only *looks* hung, it's still
-  running, just not in text mode. The same header read is also how to verify a mode switch itself
-  worked, whenever that's the actual functionality under test (e.g. an NLM that's supposed to
-  switch to a graphics mode) — expected-vs-actual resolution is a precise pass/fail, not just a
-  read-tool choice. Full detail: [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md).
+- Before reading the NetWare VM's console, check its mode first via `vmctl screendump`'s PPM header
+  (`P6\n<width> <height>\n255\n`) — 720×400 is text, 320×200 is mode 13h graphics (no QMP
+  mode-query command exists). Text → follow with `pmemsave` of `0xB8000` for exact characters.
+  Graphics → the screendump itself, via `pnmtopng`. The console only *looks* hung after a
+  graphics-mode test — it's still running, just not in text mode. Full detail:
+  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md).
+- IMPORTANT: never run a VirtualBox VM at the same time as this project's QEMU sidecar — a stock
+  VirtualBox VM starting after a KVM guest is already running can seize VT-x anyway and crash it
+  (`KVM: entry failed, hardware error 0x0`), corrupting `disk.qcow2` mid-write. Mechanism:
+  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)'s "Resolved: QEMU/KVM entry-failure
+  crash" section.
 - "Rebuild Container" never rebuilds/recreates the `qemu` sidecar, only `dev`. After a "rebuilt"
   claim, verify a `.devcontainer/qemu/**` edit actually took effect (e.g. a QMP-visible check)
-  before trusting it. Fix needs host `docker`/`podman`, unavailable here: [docs/devcontainer.md](docs/devcontainer.md).
+  before trusting it. Fix needs host `docker`/`podman`, unavailable here:
+  [docs/devcontainer.md](docs/devcontainer.md).
 - Use Conventional Commits (`type: description` + explanatory body).
 - See [docs/agents-md-style-guide.md](docs/agents-md-style-guide.md) before editing this file.

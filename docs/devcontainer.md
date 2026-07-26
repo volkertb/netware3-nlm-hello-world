@@ -156,6 +156,10 @@ linting set up there yet.
 
 - `containerUser: "dev-container-user"` silences a JetBrains/Podman "user was not specified"
   error; must match the Dockerfile's `USER` (or be `"root"` if none).
+- `remoteUser: "dev-container-user"` — per the devcontainer spec, `containerUser` alone should be
+  enough (`remoteUser` "defaults to the same user as the container"), but Zed doesn't honor that
+  default and spawns as root without `remoteUser` set explicitly, regardless of `containerUser`.
+  Harmless duplication for spec-compliant tools (VS Code, JetBrains).
 - `dockerComposeFile`/`service`/`workspaceFolder`: the devcontainer builds via
   `docker-compose.yml` instead of a single-container `build`, so the QEMU sidecar
   ([qemu-vm-debugging.md](qemu-vm-debugging.md)) can run as a second Compose service. `/dev/kvm`

@@ -20,7 +20,7 @@ QEMU/KVM entry-failure crash caused by a concurrent VirtualBox VM" below for a c
 case of exactly this gap (`vmctl status` reported `running`, i.e. process-alive, while the guest
 itself had already fatally crashed).
 
-What exists now, deliberately scoped down from the full requirements below:
+What exists now:
 
 - `.devcontainer/docker-compose.yml` turns the devcontainer into two Compose services: `dev`
   (the existing image) and `qemu` (the sidecar, `.devcontainer/qemu/`). `devcontainer.json`
@@ -325,46 +325,14 @@ NLM's own `Hello world!` output. Read back via QMP `pmemsave` of the VGA text bu
 console is VGA text, not serial" above) rather than a screendump — decoded text is the right tool
 to verify a text-mode console, not a bitmap.
 
-## Requirements (as stated by the user, 2026-07-19)
-
-Done: the sidecar-container decision, screen reads (`pmemsave`/`screendump`) plus generic QMP
-passthrough for debugging, keyboard injection (`vmctl type`/`qmp type`), and VNC (`vmctl vnc`).
-Still open: automatic hang detection (`vmctl status` only checks the process is alive, not that
-the guest is responsive).
-
-- A QEMU instance running a NetWare 3.x VM, spun up alongside the devcontainer as a sidecar
-  container (decided; see "Other `devcontainer.json` settings" in [devcontainer.md](devcontainer.md)
-  — the `/dev/kvm` `runArgs` passthrough moved to the sidecar's Compose service).
-- A separate, agent-usable control channel to inject keyboard input, read the screen
-  buffer/contents, perform debugging operations, and detect/recover from crashes or hangs.
-- VNC access for the human — not just passive viewing: full interactive keyboard/mouse control of
-  the VM, usable concurrently with the agent's own control channel, so the human can drive the
-  VM directly or intervene mid-session without needing to tear down or reconfigure anything first.
-  Done — see "VNC" below. Mouse control is present at the QEMU/protocol level (`vmport=on`'s
-  `vmmouse` device); no DOS-side driver has been tried against it yet.
-- A helper script/instructions so the human's VNC viewer starts *before* QEMU itself, then
-  auto-connects the moment QEMU comes up — and auto-reconnects after every reboot/reset. Done —
-  see "VNC" below.
-- Text-mode/console output logged to a file as well (`-serial file:` is wired up but, per above,
-  stays empty for this guest — `pmemsave`/`screendump` remain the reliable path; VNC is for a human
-  watching and interacting live, alongside the agent's own control channel, not a log).
-
 ## Existing groundwork already in place
 
-- `/dev/kvm` passthrough now lives on the `qemu` Compose service (`docker-compose.yml`), not
-  `dev` — see [devcontainer.md](devcontainer.md).
 - `README.md` has links for manually installing/running NetWare 3.12 in a VM (VirtualBox-based) —
   useful as an install/config reference even though the target here is QEMU. The current
   `vm-images/netware-3x.qcow2` was itself converted from a confirmed-working VirtualBox VDI.
-- **Text-mode restore on exit: done (2026-07-25).** `hello_vga.c` now `#include`s `modes.c` for
-  its `set_text_mode(0)` and calls it after a 5-second view of the 320×200 graphics mode, right
-  before returning — boot-verified via `pmemsave` of `0xB8000` showing "Restored 80x25 text mode."
-  and a clean console prompt afterward, no VM reset needed. `set_text_mode()`'s canned CRTC
-  register table also hardcodes the cursor-location registers, stomping wherever NetWare's own
-  console prompt had the cursor; fixed by snapshotting the cursor (`get_vga_cursor()`, already in
-  `hello_vga.c`) immediately before the graphics switch and restoring it (`set_vga_cursor()`)
-  right after `set_text_mode(0)` — boot-verified the cursor lands back exactly where it was.
-  `hello.nlm` never switches modes, so it doesn't need any of this.
+- Text-mode restore + cursor-position restore on exit from a graphics-mode switch: done — the
+  mechanism and why it's needed are documented in `vga_util.c`/`.h`'s own comments, not repeated
+  here.
 
 ## Considered and rejected: Vagrant
 
@@ -387,23 +355,3 @@ The sidecar keeps the QEMU command line (period-correct `-machine`/`-cpu`/NIC, `
 `-serial file:`) under direct control, gives two reset primitives (QMP `system_reset` plus a
 container restart for a wedged VM), and stays reproducible via a Compose service — the declarative
 benefit a `Vagrantfile` would offer, without the extra runtime.
-
-## QMP/QEMU facts, verified against qemu.org before implementing
-
-- Commands used: `system_reset`, `quit` (VM power-off — not graceful; NetWare 3.x is pre-ACPI, so
-  `system_powerdown` would be a no-op on this guest), `screendump`, `pmemsave`, `send-key`
-  (keystrokes, wired into `vmctl type`/`qmp type` — see "Keyboard injection" above).
-- `-qmp tcp:HOST:PORT,server=on,wait=off` opens a QMP TCP listener without blocking VM boot on a
-  client connecting (`server,nowait` is the older, equivalent spelling).
-- `-serial file:PATH` logs the serial line to a file — see the VGA-not-serial caveat above for why
-  this alone doesn't give console output for this guest.
-- Accelerator fallback is a `-machine` property, not the standalone `-accel` flag — see "Two real
-  bugs" above.
-- `-device floppy,id=<id>` with no `drive=` boots an empty, addressable removable drive;
-  `blockdev-change-medium`/`eject` (QMP) insert/remove media at runtime — verified against QEMU
-  10.0.0 source (`hw/block/fdc.c`, `hw/i386/pc.c`, `qapi/block.json`), not a docs summary — see
-  "Floppy load/eject" above.
-- `-vnc host:d` publishes VNC on TCP port `5900+d`; `usb-tablet` needs a guest USB stack (confirmed
-  against QEMU's own USB device docs) so it doesn't apply to a DOS-era guest; `vmport=on` (a
-  `-machine` property) auto-creates a `vmmouse` PS/2 device with no separate `-device` flag needed
-  — verified against QEMU 10.0.0 source (`hw/i386/pc.c`'s `pc_superio_init()`) — see "VNC" above.
