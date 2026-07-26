@@ -51,8 +51,9 @@ apt-installed packages do **not** carry across a `COPY` — only explicitly copi
 4. **`dev-env`** (`debian:13.6`) — the devcontainer image. Copies `/nlm_disk.img`, `/usr/local`,
    `/usr/nwsdk`, `/usr/bin/nlmimp` from `builder`; installs JetBrains dev-container prerequisites
    and debugging/analysis tools (python3, xxd, file, bsdextrautils, qemu-utils, socat, jq,
-   ripgrep, shellcheck, strace, netpbm — `--no-install-recommends`; `qemu-system-x86` deliberately
-   absent, the VM runs in a sidecar); sets up two Python venvs and an SCA/linting gate (below);
+   ripgrep, shellcheck, strace, netpbm, graphicsmagick, poppler-utils — `--no-install-recommends`;
+   `qemu-system-x86` deliberately absent, the VM runs in a sidecar); sets up two Python venvs and
+   an SCA/linting gate (below);
    creates non-root `dev-container-user`; installs Claude Code natively (`curl -fsSL
    https://claude.ai/install.sh | bash` — the npm-based devcontainer Feature left a root-owned
    leftover that broke auto-updates); repeats the sample-NLM build as the non-root user and gates

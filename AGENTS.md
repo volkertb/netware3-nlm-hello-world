@@ -8,7 +8,8 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
 
 - `make` (repo root) builds two NLMs — `hello.nlm` (console output + text-buffer writes) and
   `hellovga.nlm` (320×200 VGA graphics-mode switch, fades an embedded picture in/out via DAC
-  palette ramping, then restores 80×25 text mode before exiting) — deep-verifies each with
+  palette ramping while playing an OPL2/AdLib jingle ([docs/sound.md](docs/sound.md)), then
+  restores 80×25 text mode before exiting) — deep-verifies each with
   `verify-nlm` (byte-checks every relocation and the NLM header, so toolchain corruption cannot
   slip through), and packs both into `floppy.img` via `mtools`. Works only inside the devcontainer
   (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).

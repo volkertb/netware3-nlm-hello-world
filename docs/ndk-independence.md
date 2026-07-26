@@ -65,11 +65,8 @@ first on the NDK/CLIB toolchain — this section describes redoing it on Track B
    - keyboard: port 0x60/0x64 polling *conflicts with the console's own handler* — either accept
      stolen keys on a dedicated "game console" box, or hook the keyboard IRQ via the kernel's
      interrupt-registration exports (research; drivers do it, so the mechanism exists);
-   - sound: Adlib (pure port I/O — easiest), Sound Blaster (port I/O + DMA controller
-     programming + IRQ hook) — **not started**; QEMU emulates both, but the sidecar's
-     `qemu-system-i386` invocation has no audio device or backend wired up yet at all (needs an
-     `-audiodev` backend, `-device adlib,audiodev=<id>` for OPL2 at 0x388, later `-device
-     sb16,audiodev=<id>`);
+   - sound: proven feasible via pure port I/O on the NDK/CLIB toolchain as-is — AdLib (OPL2)
+     done, Sound Blaster not started; detail: [sound.md](sound.md);
    - restore text mode on exit (done, see [qemu-vm-debugging.md](qemu-vm-debugging.md)) so the
      server stays usable.
 
@@ -119,13 +116,13 @@ Link as a static `libc.a` listed in the `.def`.
 ## Suggested sequencing
 
 QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC), direct-hardware graphics
-(mode switch, palette fade, picture display), and text-mode restore on exit are all done — see
-[qemu-vm-debugging.md](qemu-vm-debugging.md).
+(mode switch, palette fade, picture display), text-mode restore on exit, and AdLib sound are all
+done — see [qemu-vm-debugging.md](qemu-vm-debugging.md) and [sound.md](sound.md).
 
-**Track A, next up:** sound (Adlib first, then Sound Blaster — see "Game platform" above for the
-QEMU-side gap that blocks it) and, lower priority, other VGA modes/Mode X, built and boot-tested
-the same way the graphics work was, still on the existing NDK/CLIB toolchain. Keyboard IRQ hooking
-(see "Game platform" above) fits here too if it comes up before Track B.
+**Track A, next up:** Sound Blaster (see [sound.md](sound.md)) and, lower priority, other VGA
+modes/Mode X, built and boot-tested the same way the graphics work was, still on the existing
+NDK/CLIB toolchain. Keyboard IRQ hooking (see "Game platform" above) fits here too if it comes up
+before Track B.
 
 **Track B, once Track A's experiments are done:** tier 1+2 (NDK-free, verified by sidecar boots)
 → mini-libc (picolibc) port → repeat Track A's graphics/sound experiments on the NDK-free stack
