@@ -18,6 +18,11 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
   (each with its own header) rather than `#include`-splicing their `.c` files into `hello_vga.c` —
   the earlier splice relied on implicit, same-translation-unit ordering that gcc ≥ 14 no longer
   tolerates: [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md)'s gcc-landmine watch list.
+- `make lint` (cppcheck + flawfinder + clang-tidy, checks scoped to `bugprone-*`) and `make
+  format`/`format-check` (clang-format, config in `.clang-format`) cover this project's own C
+  sources — not `modes.c`, vendored public-domain code kept diffable against its upstream. Tools
+  install in the devcontainer image but aren't a build-time gate there, unlike the shell/Python
+  SCA gate: [docs/devcontainer.md](docs/devcontainer.md).
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
   3.11/3.12. `make deploy` builds if needed, starts the QEMU sidecar VM (idempotent), and mounts
   `floppy.img` into it — use this instead of running `vmctl on`/`vmctl floppy load` directly. The
@@ -48,6 +53,8 @@ upstream after 2.31.
    Track B (deferred): drop the proprietary NDK (its real build-time surface is one 892-byte glue
    object plus one prototype) and a picolibc-based runtime, then redo Track A's experiments on it
    for comparison.
+3. Considered, not decided: a git pre-commit hook auto-running `make lint format-check`. Tradeoffs
+   noted in [docs/devcontainer.md](docs/devcontainer.md)'s C linting toolchain section.
 
 ## Rules
 
@@ -61,10 +68,8 @@ upstream after 2.31.
 - After creating/editing a `.devcontainer/**` shell or Python script, run shellcheck / `ruff check`
   / `pylint` / `python3 -m py_compile` on it (config: `.devcontainer/pyproject.toml`) — same tools
   the Dockerfile's SCA gate enforces at build time.
-- After creating/editing this project's own C sources, run `make lint` (cppcheck + flawfinder) and
-  `make format`/`format-check` (clang-format, config in `.clang-format`). Excludes `modes.c` —
-  vendored public-domain code kept diffable against its upstream, not this project's to reformat
-  or gate on. clang-tidy deliberately left out for now.
+- After creating/editing this project's own C sources, run `make lint` and `make format-check`
+  (`make format` to apply) — see Build & verify above.
 - Before reading the NetWare VM's console, check its mode first via `vmctl screendump`'s PPM header
   (`P6\n<width> <height>\n255\n`) — 720×400 is text, 320×200 is mode 13h graphics (no QMP
   mode-query command exists). Text → follow with `pmemsave` of `0xB8000` for exact characters.

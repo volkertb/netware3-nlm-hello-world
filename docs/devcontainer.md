@@ -150,8 +150,27 @@ shellcheck + `py_compile` + `ruff` + `pylint` + `pip-audit`, failing the build o
 same pattern as `verify-nlm` gating the sample NLM build. `vmctl` is named `vmctl.sh` in source for
 exactly this reason (picked up by the plain `*.sh` glob instead of a hardcoded exception); the
 installed `/usr/local/bin/vmctl` command still has no extension. Covers this project's own
-shell/Python setup scripts only — not the C/NLM code under test, a separate concern with no
-linting set up there yet.
+shell/Python setup scripts only — not the C/NLM code under test, a separate concern covered by
+`make lint`/`format` instead (below).
+
+## C linting toolchain (`dev-env` stage)
+
+`cppcheck`/`flawfinder`/`clang-format`/`clang-tidy` install here but aren't a build-time gate like
+the SCA gate above — this project's own C code isn't even copied into the image. `make
+lint`/`format`/`format-check` (AGENTS.md) is the actual enforcement point, deliberately: tool
+*installation* is a devcontainer-image concern, but *running* the linters is part of the C build
+process, so it belongs in the Makefile. Tool-choice rationale (`clang-tidy --checks='bugprone-*'`
+only — the default set fights this project's period-correct style; `modes.c` excluded — vendored
+public-domain code kept diffable against its upstream) lives as comments next to the
+Dockerfile/Makefile/`.clang-format` config it explains, not repeated here.
+
+**Considered, not decided: a git pre-commit hook** running `make lint format-check` automatically,
+instead of relying on AGENTS.md's "run after editing" rule. Leaning toward a lightweight custom
+hook (`.githooks/pre-commit` + `git config core.hooksPath`, wired up in `postCreate`) over the
+`pre-commit` framework — avoids a new Python dependency for what two existing `make` targets
+already do. Open questions: hard-block vs. warn-only (WIP commits during debugging vs. accidentally
+shipping unlinted code), and that it'd only work from inside the devcontainer, where the tools
+live. Revisit if this comes up again.
 
 ## Other `devcontainer.json` settings
 
