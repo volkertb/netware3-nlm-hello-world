@@ -186,41 +186,6 @@ actually resuming, even when reset produces a textbook-clean post-reset register
 - `vmctl floppy status` — confirms whether a floppy/NLM was even involved, which is what ruled out
   `hellovga.nlm` here.
 
-Artifacts from both incidents (register dumps, `qemu-stdouterr.log`, the `floppy.img` from the
-first crash, screendumps, and a full `dump-guest-memory` RAM snapshot from the first) are preserved
-under `shared/crashes/20260726T123825Z/` and `shared/crashes/20260726T142915Z/` — **deliberately not
-committed**: a full guest memory dump contains actual NetWare OS/CLIB code and data, under the same
-Novell copyright as the NDK (see `LICENSE.md`), not something to put in git history.
-`shared/crashes/` gets its own explicit `/shared/crashes/` `.gitignore` entry (redundant with the
-blanket `shared/` line already there, kept anyway so the exclusion is self-documenting and doesn't
-depend on that broader rule never narrowing).
-
-SHA-256 checksums of both incidents' artifacts, recorded here (in git) since the artifacts
-themselves aren't - a parent-directory `.gitignore` exclusion can't be selectively undone for one
-file inside it, so this is the only piece of each incident that can live in git:
-
-```
-# shared/crashes/20260726T123825Z/ (first crash - hellovga.nlm's second graphics-mode round-trip,
-# later shown to be coincidental, not causal)
-19300dcc2422010638343056b8c08cb065ca460f344f34eab6e465292199cdce  floppy.img
-14edc647a7ef84f7a9bc8ce19472174c26aacb643917efb9889912d0659e62b6  frozen1.ppm
-14edc647a7ef84f7a9bc8ce19472174c26aacb643917efb9889912d0659e62b6  frozen2.ppm
-f2cdf07fad644ed29b04a6c1b8e15c2755a527868b83587ab429d20f25faca7e  guest-memory.dump
-fe8ab6bb38d1235f5ff1830026752d694b545546d4011f464059e3c8742d4a70  info-registers.json
-b74c4ee908827d700d0da38b4ed56a65f482ece320ba5f129da0eff5cc09d523  info-status.json
-6c555672e4a225ac65a01cd69aad1cd47f1ba910618d9c4cc453a5b9abe51d19  qemu-stdouterr.log
-43df9362c3f9efa9916f2bd77cb0371bb0deb98f274e1b6374b9e8d789b0ecb2  query-kvm.json
-ccbeb3b566791b357a53bd8d99402171d3ffa46a1cf6190e36899ff1f4826fe2  query-status.json
-
-# shared/crashes/20260726T142915Z/ (second crash - fresh process, empty floppy tray, plain NetWare
-# boot+idle only - the one that ruled out hellovga.nlm)
-fe8ab6bb38d1235f5ff1830026752d694b545546d4011f464059e3c8742d4a70  info-registers.json
-b74c4ee908827d700d0da38b4ed56a65f482ece320ba5f129da0eff5cc09d523  info-status.json
-15cd155090ab339779d258d036588ef8b14a4727f76d0b9e3379d4cb3c6bc500  last-good-screendump.ppm
-1f7fbb35b61614c22fd625aa734cf5132d79f1516abcbef6dcaeaf605745efd9  qemu-stdouterr.log
-ccbeb3b566791b357a53bd8d99402171d3ffa46a1cf6190e36899ff1f4826fe2  query-status.json
-```
-
 Distinct from the already-resolved 2025 abend saga referenced elsewhere in this repo (AGENTS.md,
 `docs/nlm-toolchain-notes.md`) — that was an NLM relocation/toolchain bug with a different symptom
 (the NLM itself abending, not QEMU/KVM faulting). Don't conflate the two.
