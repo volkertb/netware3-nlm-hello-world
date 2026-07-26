@@ -46,8 +46,9 @@ hello_vga.o:	hello_vga.c generated/hello_vga_pic.h vga_util.h
 generated:
 	mkdir -p generated
 
-generated/hello_vga_pic.c generated/hello_vga_pic.h:	pics/yes_netware_320x200.pcx pcx_to_c.py | generated
-	python3 pcx_to_c.py pics/yes_netware_320x200.pcx generated/hello_vga_pic.c generated/hello_vga_pic.h
+generated/hello_vga_pic.c generated/hello_vga_pic.h:	pics/yes_netware_320x200.png pcx_to_c.py | generated
+	gm convert pics/yes_netware_320x200.png generated/yes_netware_320x200.pcx
+	python3 pcx_to_c.py generated/yes_netware_320x200.pcx generated/hello_vga_pic.c generated/hello_vga_pic.h
 
 hello_vga_pic.o:	generated/hello_vga_pic.c
 	$(CC) $(CFLAGS) -c generated/hello_vga_pic.c -o hello_vga_pic.o
@@ -61,4 +62,3 @@ clean:
 	rm -f *.img
 	rm -f *.tmp.c
 	rm -rf generated
-

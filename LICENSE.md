@@ -6,7 +6,7 @@ Copyright owned by whomever owns Novell nowadays (OpenText, I believe). Dockerfi
 
 Although Novell only ever offered the NDK behind a registration wall, none of the original download sites are on-line anymore as of April 2025. The only site where I could find a copy was the Internet Archive. When building the dev container for this project, the Dockerfile pulls the ISO from there.
 
-## "Yes, it runs with NetWare" logo (pics/yes_netware_320x200.pcx)
+## "Yes, it runs with NetWare" logo (pics/yes_netware_320x200.png)
 
 Copyright owned by whomever owns Novell nowadays (see "Novell NDK" above). Used here purely as an
 homage to NetWare in a graphics-mode experiment - this project is not officially certified or
