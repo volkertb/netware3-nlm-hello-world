@@ -7,9 +7,32 @@ CC = gcc
 # -fno-asynchronous-unwind-tables: gcc's .eh_frame carries PC-relative relocs the NLM format
 # cannot represent (nlmconv rejects them; NetWare never reads .eh_frame anyway).
 # -gdwarf-4: i386-netware-ld (binutils 2.30) predates DWARF 5, gcc's default since gcc 11.
-CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tables -Wall -O2 -gdwarf-4 -I/usr/nwsdk/include/ -nostdinc -fno-builtin -fpack-struct
+CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tables -Wall -Wextra -O2 -gdwarf-4 -I/usr/nwsdk/include/ -nostdinc -fno-builtin -fpack-struct
+
+# This project's own hand-written/adapted C sources - not modes.c, which stays untouched to
+# preserve diffability against its public-domain upstream (see AGENTS.md), and not the generated/
+# or .devcontainer/ trees, which aren't this project's own code to lint or reformat either.
+LINT_SOURCES = hello.c hello_vga.c vga_util.c vga_util.h adlib_util.c adlib_util.h \
+	implicit_nlm_defs.h nlm_io_wrapper.c nlm_io_wrapper.h vgamode.c vgamode.h modes.h
 
 all:		floppy.img
+
+# __GNUC__/__i386__ match gcc -m32's own predefined macros (see CFLAGS) - cppcheck's bundled
+# preprocessor needs them explicitly to pick the right branch of NDK headers like stdarg.h.
+.PHONY: lint
+lint:
+	cppcheck --enable=warning,style,performance,portability --check-level=exhaustive \
+		--error-exitcode=1 -I/usr/nwsdk/include/ -DN_PLAT_NLM -D__GNUC__ -D__i386__ $(LINT_SOURCES)
+	flawfinder --error-level=2 $(LINT_SOURCES)
+	clang-tidy --checks='bugprone-*' --warnings-as-errors='*' $(LINT_SOURCES) -- \
+		-m32 -nostdinc -fno-builtin -fpack-struct -I/usr/nwsdk/include/
+
+.PHONY: format format-check
+format:
+	clang-format -i $(LINT_SOURCES)
+
+format-check:
+	clang-format --dry-run --Werror $(LINT_SOURCES)
 
 # Starts the QEMU sidecar VM (idempotent - a no-op if already on) and mounts the built floppy
 # image into it, ready for `vmctl type $'LOAD A:HELLOVGA.NLM\n'` - see docs/qemu-vm-debugging.md.
@@ -27,7 +50,7 @@ hello.nlm:	hello.o vga_util.o hello.def
 	nlmconv --output-target=nlm32-i386 -T hello.def
 	verify-nlm hello.nlm hello.def
 
-hellovga.nlm:	hello_vga.o hello_vga_pic.o vga_util.o dune0_song4.o adlib_util.o hello_vga.def
+hellovga.nlm:	hello_vga.o hello_vga_pic.o vga_util.o dune0_song4.o adlib_util.o vgamode.o modes.o nlm_io_wrapper.o hello_vga.def
 	nlmconv --output-target=nlm32-i386 -T hello_vga.def
 	verify-nlm hello_vga.nlm hello_vga.def
 	mv hello_vga.nlm hellovga.nlm
@@ -38,7 +61,7 @@ hello.o:	hello.c
 	mv hello.tmp.o hello.o
 	rm hello.tmp.c
 
-hello_vga.o:	hello_vga.c generated/hello_vga_pic.h vga_util.h generated/dune0_song4.h adlib_util.h
+hello_vga.o:	hello_vga.c generated/hello_vga_pic.h vga_util.h generated/dune0_song4.h adlib_util.h vgamode.h modes.h
 	sed "s/INSERT_TIMESTAMP_HERE/$$(date)/g" hello_vga.c > hello_vga.tmp.c
 	$(CC) $(CFLAGS) -c hello_vga.tmp.c
 	mv hello_vga.tmp.o hello_vga.o
@@ -93,6 +116,15 @@ adlib_util.o:	adlib_util.c adlib_util.h generated/opl2_event.h
 
 vga_util.o:	vga_util.c
 	$(CC) $(CFLAGS) -c vga_util.c
+
+vgamode.o:	vgamode.c vgamode.h nlm_io_wrapper.h
+	$(CC) $(CFLAGS) -c vgamode.c
+
+modes.o:	modes.c modes.h implicit_nlm_defs.h
+	$(CC) $(CFLAGS) -c modes.c
+
+nlm_io_wrapper.o:	nlm_io_wrapper.c nlm_io_wrapper.h implicit_nlm_defs.h
+	$(CC) $(CFLAGS) -c nlm_io_wrapper.c
 
 clean:
 	rm -f *.nlm

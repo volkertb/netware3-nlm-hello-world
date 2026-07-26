@@ -68,8 +68,12 @@ pipeline can't handle. Check these first when a bigger NLM misbehaves despite cl
   `-fno-stack-protector`.
 - `-fcf-protection` emits an allocatable `.note.gnu.property` section → junk in the NLM data
   image. Remedy: `-fcf-protection=none`.
-- gcc ≥ 14 makes implicit function declarations hard errors; vintage sources may need
-  `-std=gnu89`.
+- gcc ≥ 14 makes implicit function declarations hard errors. Confirmed 2026-07-26 splitting
+  vgamode.c/modes.c/nlm_io_wrapper.c out of a unity-build `#include` into separately-compiled
+  objects: each relied on another's functions being defined earlier in the same glued translation
+  unit, with no prototype anywhere. Fix was adding real headers (vgamode.h/modes.h/
+  nlm_io_wrapper.h), not `-std=gnu89` — that would silently re-permit the same class of bug
+  project-wide instead of catching it at the two or three genuine call sites.
 - nlmconv leaves a partial output `.nlm` behind on failure — judge success only by exit status
   (the `verify-nlm` make step already enforces this).
 

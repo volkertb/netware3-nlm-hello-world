@@ -1,0 +1,22 @@
+---
+# Formats this project's own hand-written/adapted C sources (see Makefile's LINT_SOURCES) - not
+# modes.c, which stays untouched to preserve diffability against its public-domain upstream (see
+# AGENTS.md).
+BasedOnStyle: LLVM
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 100
+ReflowComments: false                   # don't rewrap prose doc-comments - several contain URLs that
+                                        # must stay on one line
+BreakBeforeBraces: Attach
+PointerAlignment: Right
+SpaceBeforeParens: ControlStatements
+AllowShortFunctionsOnASingleLine: None
+BinPackParameters: false                # one param per line once a signature wraps, instead of packing
+                                        # as many as fit - so a trailing // NOLINT comment lands on its
+                                        # own short line, not an arbitrary reflow
+SortIncludes: true                      # safe now every include here is a real self-contained header (the
+                                        # vgamode.c/modes.c/nlm_io_wrapper.c split, see AGENTS.md's Build &
+                                        # verify) - trailing per-include comments travel with their line
+                                        # when sorted, verified with clang-format 19

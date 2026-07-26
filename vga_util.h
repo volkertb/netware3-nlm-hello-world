@@ -28,7 +28,10 @@ void restore_vga_palette();
  */
 void set_vga_palette(const unsigned char *rgb_palette, int num_colors);
 void set_vga_palette_black();
-void fade_palette(const unsigned char *target_rgb_palette, int num_colors, int steps,
-                   int step_delay_ms, int fade_in);
+void fade_palette(const unsigned char *target_rgb_palette,
+                  int num_colors,
+                  int steps,
+                  int step_delay_ms,
+                  int fade_in);
 
 #endif

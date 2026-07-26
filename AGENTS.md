@@ -14,6 +14,10 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
   slip through), and packs both into `floppy.img` via `mtools`. Works only inside the devcontainer
   (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
 - `*.def` files are the NLM header/link definitions consumed by `nlmconv`.
+- `hello_vga.nlm` links `vgamode.o`/`modes.o`/`nlm_io_wrapper.o` as separately-compiled objects
+  (each with its own header) rather than `#include`-splicing their `.c` files into `hello_vga.c` —
+  the earlier splice relied on implicit, same-translation-unit ordering that gcc ≥ 14 no longer
+  tolerates: [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md)'s gcc-landmine watch list.
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
   3.11/3.12. `make deploy` builds if needed, starts the QEMU sidecar VM (idempotent), and mounts
   `floppy.img` into it — use this instead of running `vmctl on`/`vmctl floppy load` directly. The
@@ -56,8 +60,11 @@ upstream after 2.31.
   before stating them as fact, rather than from memory or a search summary.
 - After creating/editing a `.devcontainer/**` shell or Python script, run shellcheck / `ruff check`
   / `pylint` / `python3 -m py_compile` on it (config: `.devcontainer/pyproject.toml`) — same tools
-  the Dockerfile's SCA gate enforces at build time. Not the C/NLM code under test — no linting set
-  up there yet.
+  the Dockerfile's SCA gate enforces at build time.
+- After creating/editing this project's own C sources, run `make lint` (cppcheck + flawfinder) and
+  `make format`/`format-check` (clang-format, config in `.clang-format`). Excludes `modes.c` —
+  vendored public-domain code kept diffable against its upstream, not this project's to reformat
+  or gate on. clang-tidy deliberately left out for now.
 - Before reading the NetWare VM's console, check its mode first via `vmctl screendump`'s PPM header
   (`P6\n<width> <height>\n255\n`) — 720×400 is text, 320×200 is mode 13h graphics (no QMP
   mode-query command exists). Text → follow with `pmemsave` of `0xB8000` for exact characters.

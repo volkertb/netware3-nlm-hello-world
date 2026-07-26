@@ -10,6 +10,9 @@ INPUT   hello_vga_pic.o                     # generated const arrays, see pcx_to
 INPUT   vga_util.o
 INPUT   dune0_song4.o                       # generated OPL2 event stream, see music/adl_to_c.py
 INPUT   adlib_util.o
+INPUT   vgamode.o                           # init_graph_vga(), see https://forum.osdev.org/viewtopic.php?p=69240#p69240
+INPUT   modes.o                             # set_text_mode(), Chris Giese's public-domain VGA driver
+INPUT   nlm_io_wrapper.o                    # outb/outw/inb, see https://forum.osdev.org/viewtopic.php?p=69241#p69241
 INPUT   /usr/nwsdk/lib/prelude.o            # clib startup code
 
 # all imported functions and import lists

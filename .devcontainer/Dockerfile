@@ -337,6 +337,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt -y install --no-install-recommends python3 python3-venv xxd file bsdextrautils qemu-utils socat jq ripgrep shellcheck strace netpbm graphicsmagick poppler-utils
 
+# C linting toolchain, invoked via `make lint`/`make format` (Makefile), not a build-time gate
+# here - unlike the shell/Python SCA gate below, this project's own C code isn't available yet
+# (COPY . happens further down, for that gate). cppcheck for static analysis/bugs, flawfinder for
+# security-relevant CLIB calls (strcpy/sprintf/gets), clang-format for formatting, clang-tidy
+# (checks scoped to bugprone-* in the Makefile - the broader default set fights this project's
+# deliberately period-correct C style) for integer-narrowing/macro-hygiene bugs the others miss.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt -y install cppcheck flawfinder clang-format clang-tidy
+
 # Isolated venv for qmp's Python dependencies (qemu/requirements.txt) - Debian 13's system python3
 # is PEP 668 "externally managed", so a venv avoids needing --break-system-packages.
 # requirements.txt is kept around (not rm'd here) for the pip-audit run further below.

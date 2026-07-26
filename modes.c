@@ -14,6 +14,8 @@ To do:
 #include <stdio.h> /* printf() */
 #include <nwconio.h> /* getch() */
 //#include <dos.h> /* FP_SEG(), FP_OFF(), inportb(), outportb() */
+#include "implicit_nlm_defs.h" /* inp(), outp() */
+#include "modes.h"
 
 /********************************* TURBO C **********************************/
 #if defined(__TURBOC__)
