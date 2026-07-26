@@ -21,6 +21,13 @@
   // Should be the same as the USER configured in the Dockerfile.
   // If no explicit USER is specified in the Dockerfile (which is recommended), this value should be set to "root".
   "containerUser": "dev-container-user",
+
+  // From the devcontianer schema: "The username to use for spawning processes in the container including lifecycle
+  // scripts and any remote editor/IDE server process. The default is the same user as the container."
+  // However, apparently for the Zed IDE, this needs to be set explicity, since it will use the container as root
+  // if omitted, regardless of what value `containerUser` is set to.
+  "remoteUser": "dev-container-user",
+
   // Works around an open Podman bug in the CLI's post-build UID-sync step
   // (podman-container-tools/podman#23055). Docker users: flip this back to `true` (spec
   // default) - the bug is Podman-only. Full story, host-level alternative, and why this can't
