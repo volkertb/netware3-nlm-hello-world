@@ -8,6 +8,12 @@ CFLAGS = -m32 -fno-pic -fno-asynchronous-unwind-tables -Wall -O2 -gdwarf-4 -I/us
 
 all:		floppy.img
 
+# Starts the QEMU sidecar VM (idempotent - a no-op if already on) and mounts the built floppy
+# image into it, ready for `vmctl type $'LOAD A:HELLOVGA.NLM\n'` - see docs/qemu-vm-debugging.md.
+deploy:	floppy.img
+	vmctl on
+	vmctl floppy load floppy.img
+
 floppy.img: hello.nlm hellovga.nlm
 	dd if=/dev/zero of=floppy.img bs=1440k count=1
 	mformat -C -f 1440 -i floppy.img ::

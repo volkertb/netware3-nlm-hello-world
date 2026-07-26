@@ -13,12 +13,13 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
   only inside the devcontainer (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
 - `*.def` files are the NLM header/link definitions consumed by `nlmconv`.
 - Functional correctness still requires booting `floppy.img` on real or emulated NetWare
-  3.11/3.12. The QEMU sidecar (`vmctl on|off|reset|status|screendump|floppy load|eject|type|vnc`,
-  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) boots/stops the VM and gets
-  `floppy.img` into it (`vmctl floppy load`) — boot-verified 2026-07-25, including the text-mode
-  restore, both NLMs work, including the graphics switch that used to abend. Root cause of the
-  2025 abends was a toolchain relocation bug; every 2025-era theory (IOPL, `TYPE 9`, `OS_DOMAIN`)
-  is dead. History, mechanism, and the mandatory CFLAGS rules:
+  3.11/3.12. `make deploy` builds if needed, starts the QEMU sidecar VM (idempotent), and mounts
+  `floppy.img` into it — use this instead of running `vmctl on`/`vmctl floppy load` directly. The
+  sidecar itself (`vmctl on|off|reset|status|screendump|floppy load|eject|type|vnc`,
+  [docs/qemu-vm-debugging.md](docs/qemu-vm-debugging.md)) is boot-verified as of 2026-07-25,
+  including the text-mode restore — both NLMs work, including the graphics switch that used to
+  abend. Root cause of the 2025 abends was a toolchain relocation bug; every 2025-era theory
+  (IOPL, `TYPE 9`, `OS_DOMAIN`) is dead. History, mechanism, and the mandatory CFLAGS rules:
   [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md).
 - `.devcontainer/build_and_fetch_floppy_image.sh` builds the container image standalone and
   copies `/nlm_disk.img` to `~/Downloads/`, without opening a devcontainer session.

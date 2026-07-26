@@ -194,6 +194,10 @@ platform are all in view, and this sidecar may get reused for other DOS-era proj
 
 ### Floppy load/eject (2026-07-22)
 
+`make deploy` (repo root) wraps the common case - build if needed, `vmctl on`, `vmctl floppy
+load floppy.img` - for anything beyond that (a non-default image, `eject`/`status`, etc.), use
+`vmctl` directly, documented below.
+
 `vmctl floppy load [image]` copies a built image (default: the repo-root `floppy.img`) into
 `shared/floppy/` — the same host-bind pattern `shared/logs/` already used, now generalized to
 `../shared:/vm/shared` with `logs`/`floppy` subdirs, rather than mounting the repo into `qemu` or
