@@ -20,7 +20,12 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
   including the text-mode restore — both NLMs work, including the graphics switch that used to
   abend. Root cause of the 2025 abends was a toolchain relocation bug; every 2025-era theory
   (IOPL, `TYPE 9`, `OS_DOMAIN`) is dead. History, mechanism, and the mandatory CFLAGS rules:
-  [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md).
+  [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md). Separately: a real QEMU/KVM-level
+  crash (`KVM: entry failed, hardware error 0x0`, not an NLM abend) hit during 2026-07-26 testing,
+  initially suspected to be `hellovga.nlm`-specific but tracked down to a concurrently-running
+  VirtualBox VM on the host competing for VT-x — **don't run VirtualBox VMs alongside this
+  project's QEMU sidecar**. Full investigation: docs/qemu-vm-debugging.md's "Resolved: QEMU/KVM
+  entry-failure crash caused by a concurrent VirtualBox VM" section.
 - `.devcontainer/build_and_fetch_floppy_image.sh` builds the container image standalone and
   copies `/nlm_disk.img` to `~/Downloads/`, without opening a devcontainer session.
 

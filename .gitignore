@@ -11,3 +11,9 @@ vm-images/
 shared/
 .devcontainer/.env
 /generated/
+
+# Redundant with the blanket `shared/` above - kept explicit so this exclusion is self-documenting
+# and survives even if `shared/`'s own ignore rule ever narrows. VM crash artifacts can include a
+# full guest memory dump (NetWare OS/CLIB code and data, under the same Novell copyright as the
+# NDK - see LICENSE.md), never meant to enter git history.
+/shared/crashes/

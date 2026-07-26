@@ -15,7 +15,10 @@ in the dev image as `vmctl`/`qmp`).
 Boot-verified end to end: boot/shutdown (2026-07-21), floppy `load`/`eject` (2026-07-22), keyboard
 injection (2026-07-25), VNC (2026-07-25) — recipes and verification detail live in each feature's
 own `###` section below, not repeated here. Still open: automatic hang/crash detection (`vmctl
-status` only checks the process is alive, not that the guest is responsive).
+status` only checks the process is alive, not that the guest is responsive) — see "Resolved:
+QEMU/KVM entry-failure crash caused by a concurrent VirtualBox VM" below for a concrete, real-world
+case of exactly this gap (`vmctl status` reported `running`, i.e. process-alive, while the guest
+itself had already fatally crashed).
 
 What exists now, deliberately scoped down from the full requirements below:
 
@@ -129,6 +132,98 @@ instance — the same header read is a precise, cheap pass/fail: compare the obs
   more than 3MB — a DOS-era memory-detection quirk, not a real shortfall (root cause not chased
   further). Fixed by matching the confirmed-working VirtualBox VM's RAM exactly (`-m 16`) instead
   of guessing QEMU values.
+
+### Resolved: QEMU/KVM entry-failure crash caused by a concurrent VirtualBox VM (2026-07-26)
+
+First hit while boot-testing `hellovga.nlm`'s in-progress fade-in/out palette code: the console
+appeared frozen at the `HELLO_THERE:` prompt — but the text cursor had also stopped blinking, which
+is the tell that this is *not* a guest-side hang. Cursor blink is display-hardware emulation
+(`hw/display/vga.c`) driven independently of guest code; if it stops, the whole emulated machine has
+halted, not just NetWare. A real guest-side freeze (NetWare stuck in a loop) would leave QEMU's own
+emulated hardware, cursor included, still running.
+
+Confirmed via QMP: `qmp query-status` returned `{"status": "internal-error", "running": false}` —
+the *process* was alive (`vmctl status` still reported `running`, since it only checks that), but
+the guest itself had fatally crashed. `qemu-stdouterr.log` had already logged `KVM: entry failed,
+hardware error 0x0`, with every segment register zeroed and marked `Reserved`.
+
+**Initial hypothesis (wrong): specific to a second graphics-mode round-trip.** The first crash
+happened on the *second* consecutive `LOAD A:HELLOVGA.NLM` within one boot session, running the
+fade-in/out DAC palette code, so that looked like the trigger. Ruled out once the same crash
+(byte-for-byte identical register signature) reproduced on a **completely fresh QEMU process**
+(`vmctl off` + `vmctl on`) that had **no floppy loaded and no NLM run at all** — confirmed via `vmctl
+floppy status` showing an empty tray — just NetWare's own normal boot sequence idling at
+`NW4-IDLE.NLM`. That ruled out `hellovga.nlm`, the fade code, and the graphics mode switch entirely.
+
+**Actual root cause: a concurrently-running VirtualBox VM on the host**, competing for exclusive
+ownership of the CPU's VT-x/VMX-root state. VirtualBox's standard driver (`vboxdrv`) and KVM can't
+both actively run VMs through the normal path on Linux — whichever grabs VT-x forces the other out,
+and having a vCPU's VMCS state invalidated out from under it by a competing hypervisor is consistent
+with `KVM: entry failed, hardware error 0x0`. (Newer VirtualBox *can* coexist with KVM, but only via
+a `--with-kvm` source build using KVM's own APIs as its backend, e.g.
+[cyberus-technology/virtualbox-kvm](https://github.com/cyberus-technology/virtualbox-kvm) — not
+something a stock/distro-packaged VirtualBox install does by default.) Confirmed by closing
+VirtualBox and soak-testing: both prior crashes had hit within 20-45s of boot/idle; with VirtualBox
+closed, the sidecar ran a clean 180s idle soak (polling `qmp query-status` every 5s) with no crash.
+
+**Practical takeaway: don't run a VirtualBox VM at the same time as this project's QEMU sidecar.**
+If the sidecar starts crashing with `KVM: entry failed`, check for a concurrently-running VirtualBox
+VM first before suspecting NLM/toolchain code.
+
+**Recovery: a plain `vmctl reset`/QMP `system_reset` cannot recover a VM already in
+`internal-error`** — confirmed it leaves `query-status` at `{"status": "prelaunch"}` instead of
+actually resuming, even when reset produces a textbook-clean post-reset register state (`CR0=
+60000010`, everything else zero) that KVM still rejects on re-entry. Only a full process restart
+(`vmctl off` then `vmctl on`) actually clears it.
+
+**Diagnostic recipe used, worth keeping for next time:**
+- `qmp query-status` — the actual crash/hang signal; check `.status`/`.running`, not just process
+  liveness (`vmctl status`'s current blind spot, see "Status" above).
+- `qmp human-monitor-command command-line="info registers"` — CPU/segment register state.
+- `qmp dump-guest-memory paging=false protocol="file:/vm/shared/logs/<path>/guest-memory.dump"` —
+  full guest RAM at crash time.
+- `qmp query-kvm`, `qmp human-monitor-command command-line="info status"` — supporting context.
+- `vmctl floppy status` — confirms whether a floppy/NLM was even involved, which is what ruled out
+  `hellovga.nlm` here.
+
+Artifacts from both incidents (register dumps, `qemu-stdouterr.log`, the `floppy.img` from the
+first crash, screendumps, and a full `dump-guest-memory` RAM snapshot from the first) are preserved
+under `shared/crashes/20260726T123825Z/` and `shared/crashes/20260726T142915Z/` — **deliberately not
+committed**: a full guest memory dump contains actual NetWare OS/CLIB code and data, under the same
+Novell copyright as the NDK (see `LICENSE.md`), not something to put in git history.
+`shared/crashes/` gets its own explicit `/shared/crashes/` `.gitignore` entry (redundant with the
+blanket `shared/` line already there, kept anyway so the exclusion is self-documenting and doesn't
+depend on that broader rule never narrowing).
+
+SHA-256 checksums of both incidents' artifacts, recorded here (in git) since the artifacts
+themselves aren't - a parent-directory `.gitignore` exclusion can't be selectively undone for one
+file inside it, so this is the only piece of each incident that can live in git:
+
+```
+# shared/crashes/20260726T123825Z/ (first crash - hellovga.nlm's second graphics-mode round-trip,
+# later shown to be coincidental, not causal)
+19300dcc2422010638343056b8c08cb065ca460f344f34eab6e465292199cdce  floppy.img
+14edc647a7ef84f7a9bc8ce19472174c26aacb643917efb9889912d0659e62b6  frozen1.ppm
+14edc647a7ef84f7a9bc8ce19472174c26aacb643917efb9889912d0659e62b6  frozen2.ppm
+f2cdf07fad644ed29b04a6c1b8e15c2755a527868b83587ab429d20f25faca7e  guest-memory.dump
+fe8ab6bb38d1235f5ff1830026752d694b545546d4011f464059e3c8742d4a70  info-registers.json
+b74c4ee908827d700d0da38b4ed56a65f482ece320ba5f129da0eff5cc09d523  info-status.json
+6c555672e4a225ac65a01cd69aad1cd47f1ba910618d9c4cc453a5b9abe51d19  qemu-stdouterr.log
+43df9362c3f9efa9916f2bd77cb0371bb0deb98f274e1b6374b9e8d789b0ecb2  query-kvm.json
+ccbeb3b566791b357a53bd8d99402171d3ffa46a1cf6190e36899ff1f4826fe2  query-status.json
+
+# shared/crashes/20260726T142915Z/ (second crash - fresh process, empty floppy tray, plain NetWare
+# boot+idle only - the one that ruled out hellovga.nlm)
+fe8ab6bb38d1235f5ff1830026752d694b545546d4011f464059e3c8742d4a70  info-registers.json
+b74c4ee908827d700d0da38b4ed56a65f482ece320ba5f129da0eff5cc09d523  info-status.json
+15cd155090ab339779d258d036588ef8b14a4727f76d0b9e3379d4cb3c6bc500  last-good-screendump.ppm
+1f7fbb35b61614c22fd625aa734cf5132d79f1516abcbef6dcaeaf605745efd9  qemu-stdouterr.log
+ccbeb3b566791b357a53bd8d99402171d3ffa46a1cf6190e36899ff1f4826fe2  query-status.json
+```
+
+Distinct from the already-resolved 2025 abend saga referenced elsewhere in this repo (AGENTS.md,
+`docs/nlm-toolchain-notes.md`) — that was an NLM relocation/toolchain bug with a different symptom
+(the NLM itself abending, not QEMU/KVM faulting). Don't conflate the two.
 
 ### VNC (2026-07-25)
 
