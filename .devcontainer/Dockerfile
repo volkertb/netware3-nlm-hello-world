@@ -330,11 +330,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # QMP scripting against the planned QEMU sidecar (python3, socat, jq — see docs/qemu-vm-debugging.md),
 # converting QMP screendumps (raw PPM) to PNG for visual inspection (netpbm's pnmtopng), graphicsmagick
 # for various graphics format conversions, tools for faster searching and script/syscall troubleshooting
-# (ripgrep, shellcheck, strace). python3-venv for the qmp venv below.
+# (ripgrep, shellcheck, strace), poppler-utils (pdftoppm) for reading reference-material PDFs
+# (datasheets, period SDK manuals) during research. python3-venv for the qmp venv below.
 # --no-install-recommends because qemu-utils otherwise pulls in desktop-oriented Recommends.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt -y install --no-install-recommends python3 python3-venv xxd file bsdextrautils qemu-utils socat jq ripgrep shellcheck strace netpbm graphicsmagick
+    apt -y install --no-install-recommends python3 python3-venv xxd file bsdextrautils qemu-utils socat jq ripgrep shellcheck strace netpbm graphicsmagick poppler-utils
 
 # Isolated venv for qmp's Python dependencies (qemu/requirements.txt) - Debian 13's system python3
 # is PEP 668 "externally managed", so a venv avoids needing --break-system-packages.

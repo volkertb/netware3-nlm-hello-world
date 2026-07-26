@@ -8,9 +8,11 @@
 .devcontainer/download_cache/
 .vscode/
 vm-images/
+__pycache__/
 shared/
 .devcontainer/.env
 /generated/
+/downloads/
 
 # Redundant with the blanket `shared/` above - kept explicit so this exclusion is self-documenting
 # and survives even if `shared/`'s own ignore rule ever narrows. VM crash artifacts can include a
