@@ -47,7 +47,7 @@ generated:
 	mkdir -p generated
 
 generated/hello_vga_pic.c generated/hello_vga_pic.h:	pics/yes_netware_320x200.png pcx_to_c.py | generated
-	gm convert pics/yes_netware_320x200.png generated/yes_netware_320x200.pcx
+	gm convert -compress RLE pics/yes_netware_320x200.png generated/yes_netware_320x200.pcx
 	python3 pcx_to_c.py generated/yes_netware_320x200.pcx generated/hello_vga_pic.c generated/hello_vga_pic.h
 
 hello_vga_pic.o:	generated/hello_vga_pic.c

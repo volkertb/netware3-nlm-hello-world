@@ -15,6 +15,14 @@ def decode_pcx(data):
     if data[-769] != 0x0C:
         raise ValueError("missing 256-color VGA palette trailer")
 
+    # Byte 2 is the encoding flag: 1 = RLE, 0 = raw/uncompressed. Encoders disagree on which they
+    # emit (e.g. GraphicsMagick's `gm convert` writes raw) - decoding raw data as if it were RLE
+    # misreads any pixel byte >= 0xC0 (palette indices 192-255) as a run-length marker, corrupting
+    # the image. Must branch on it rather than assuming RLE unconditionally.
+    encoding = data[2]
+    if encoding not in (0, 1):
+        raise ValueError(f"unsupported PCX encoding byte {encoding} (expected 0 or 1)")
+
     xmin, ymin, xmax, ymax = struct.unpack("<HHHH", data[4:12])
     width = xmax - xmin + 1
     height = ymax - ymin + 1
@@ -23,17 +31,21 @@ def decode_pcx(data):
     pixels = bytearray()
     pos = 128
     for _ in range(height):
-        row = bytearray()
-        while len(row) < bytes_per_line:
-            b = data[pos]
-            pos += 1
-            if (b & 0xC0) == 0xC0:
-                count = b & 0x3F
-                value = data[pos]
+        if encoding == 1:
+            row = bytearray()
+            while len(row) < bytes_per_line:
+                b = data[pos]
                 pos += 1
-                row.extend([value] * count)
-            else:
-                row.append(b)
+                if (b & 0xC0) == 0xC0:
+                    count = b & 0x3F
+                    value = data[pos]
+                    pos += 1
+                    row.extend([value] * count)
+                else:
+                    row.append(b)
+        else:
+            row = data[pos:pos + bytes_per_line]
+            pos += bytes_per_line
         pixels.extend(row[:width])
 
     palette = data[-768:]
