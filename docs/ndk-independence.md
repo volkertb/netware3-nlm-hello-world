@@ -65,7 +65,13 @@ first on the NDK/CLIB toolchain — this section describes redoing it on Track B
      stolen keys on a dedicated "game console" box, or hook the keyboard IRQ via the kernel's
      interrupt-registration exports (research; drivers do it, so the mechanism exists);
    - sound: Adlib (pure port I/O — easiest), Sound Blaster (port I/O + DMA controller
-     programming + IRQ hook); QEMU emulates both, so the sidecar can exercise sound;
+     programming + IRQ hook); QEMU emulates both, so the sidecar can exercise sound — **not yet
+     wired up**: `.devcontainer/qemu/vm-supervisor.sh`'s `qemu-system-i386` invocation currently has
+     no audio device or backend at all (no `-audiodev`, no `-device adlib`/`sb16`). Needed before
+     this experiment can boot-test anything: an `-audiodev` backend plus `-device
+     adlib,audiodev=<id>` (OPL2 at the standard 0x388) and, later, `-device
+     sb16,audiodev=<id>` (SB16 defaults matching a guest's usual `BLASTER=A220 I5 D1 H5 T6`);
+     `-machine pcspk-audiodev=<id>` separately if PC speaker output is ever wanted too;
    - restore text mode on exit (done 2026-07-25, see [qemu-vm-debugging.md](qemu-vm-debugging.md))
      so the server stays usable.
 

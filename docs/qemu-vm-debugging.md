@@ -157,18 +157,40 @@ floppy status` showing an empty tray — just NetWare's own normal boot sequence
 
 **Actual root cause: a concurrently-running VirtualBox VM on the host**, competing for exclusive
 ownership of the CPU's VT-x/VMX-root state. VirtualBox's standard driver (`vboxdrv`) and KVM can't
-both actively run VMs through the normal path on Linux — whichever grabs VT-x forces the other out,
-and having a vCPU's VMCS state invalidated out from under it by a competing hypervisor is consistent
-with `KVM: entry failed, hardware error 0x0`. (Newer VirtualBox *can* coexist with KVM, but only via
-a `--with-kvm` source build using KVM's own APIs as its backend, e.g.
-[cyberus-technology/virtualbox-kvm](https://github.com/cyberus-technology/virtualbox-kvm) — not
-something a stock/distro-packaged VirtualBox install does by default.) Confirmed by closing
-VirtualBox and soak-testing: both prior crashes had hit within 20-45s of boot/idle; with VirtualBox
-closed, the sidecar ran a clean 180s idle soak (polling `qmp query-status` every 5s) with no crash.
+both actively run VMs through the normal path on Linux — whichever grabs VT-x forces the other out.
+Confirmed by closing VirtualBox and soak-testing: both prior crashes had hit within 20-45s of
+boot/idle; with VirtualBox closed, the sidecar ran a clean 180s idle soak (polling `qmp
+query-status` every 5s) with no crash.
+
+The precise mechanism (confirmed against kernel/VirtualBox source and `lsmod`/`VBox.log` evidence,
+not just inferred from the symptom): the *reverse* start order is normally a clean refusal — QEMU
+starting after VirtualBox already holds VT-x gets `ioctl(KVM_CREATE_VM) failed: 16 Device or
+resource busy`. But when a QEMU/KVM guest is already running and a **stock** VirtualBox VM (`vboxdrv`
+in `GLOBAL` init mode — check `HM: VT-x/AMD-v init method: GLOBAL` in `VBox.log`) starts *after* it,
+VirtualBox seizes VT-x anyway instead of detecting the conflict and returning
+`VERR_VMX_IN_VMX_ROOT_MODE`, invalidating the already-running KVM guest's VMCS out from under it —
+that's what produces `KVM: entry failed, hardware error 0x0`. **This kills the QEMU guest
+mid-instruction, with dirty page cache and in-flight writes** — not a graceful pause, genuine
+filesystem-corruption risk for the sidecar's `disk.qcow2`.
+
+Two things that look like fixes but aren't: kernel 6.16-6.17's `kvm_enable_virtualization()`/
+`kvm_disable_virtualization()` cooperative hand-off (what VirtualBox 7.2.2's changelog entry uses)
+only lets `vboxdrv` ask a KVM with *no VMs running* to step aside — it's refcounted and provably
+can't touch a KVM instance that already has a live VM, so it's neither the cause nor a fix here.
+Those symbols were also made kernel-private again in 6.18-rc1, so on newer kernels the mechanism
+isn't even in play. A genuine KVM-backed VirtualBox (no `vboxdrv`, true concurrent operation) exists
+only as the [cyberus-technology/virtualbox-kvm](https://github.com/cyberus-technology/virtualbox-kvm)
+fork (AUR-only, source build, pinned to an older VirtualBox release, needs
+`split_lock_detect=off`, drops bridged/NAT-network modes) or Oracle's own trunk-only,
+still-unreleased NEM/KVM backend — neither is what a stock/distro-packaged VirtualBox install uses
+by default.
 
 **Practical takeaway: don't run a VirtualBox VM at the same time as this project's QEMU sidecar.**
 If the sidecar starts crashing with `KVM: entry failed`, check for a concurrently-running VirtualBox
-VM first before suspecting NLM/toolchain code.
+VM first before suspecting NLM/toolchain code. If avoiding VirtualBox entirely isn't an option,
+`kvm.enable_virt_at_load=0` (kernel boot param) plus `VBoxManage setproperty hwvirtexclusive off`
+(VirtualBox `LOCAL` instead of `GLOBAL` VT-x acquisition) reduces the collision window without
+eliminating it — not a substitute for just not running both at once.
 
 **Recovery: a plain `vmctl reset`/QMP `system_reset` cannot recover a VM already in
 `internal-error`** — confirmed it leaves `query-status` at `{"status": "prelaunch"}` instead of
