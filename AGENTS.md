@@ -52,7 +52,9 @@ upstream after 2.31.
    (current): graphics/sound experiments on the NDK/CLIB toolchain as-is, period-developer style.
    Track B (deferred): drop the proprietary NDK (its real build-time surface is one 892-byte glue
    object plus one prototype) and a picolibc-based runtime, then redo Track A's experiments on it
-   for comparison.
+   for comparison. Track A's next concrete goal is a Doom port, MVP-first (VGA + AdLib + keyboard,
+   Sound Blaster/GM/LAN deferred): [docs/doom-port.md](docs/doom-port.md) — includes a confirmed
+   GPL-2.0 licensing consequence for that one artifact.
 3. Considered, not decided: a git pre-commit hook auto-running `make lint format-check`. Tradeoffs
    noted in [docs/devcontainer.md](docs/devcontainer.md)'s C linting toolchain section.
 

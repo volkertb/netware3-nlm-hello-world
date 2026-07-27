@@ -63,8 +63,8 @@ first on the NDK/CLIB toolchain — this section describes redoing it on Track B
    - graphics: VGA mode setting, VRAM writes, DAC palette fade in/out, and picture display all
      work (boot-verified); other VGA modes and Mode X are still open;
    - keyboard: port 0x60/0x64 polling *conflicts with the console's own handler* — either accept
-     stolen keys on a dedicated "game console" box, or hook the keyboard IRQ via the kernel's
-     interrupt-registration exports (research; drivers do it, so the mechanism exists);
+     stolen keys on a dedicated "game console" box, or hook the keyboard IRQ via
+     `SetHardwareInterrupt` (CLIB Advanced Services, confirmed present — see below);
    - sound: proven feasible via pure port I/O on the NDK/CLIB toolchain as-is — AdLib (OPL2)
      done, Sound Blaster not started; detail: [sound.md](sound.md);
    - restore text mode on exit (done, see [qemu-vm-debugging.md](qemu-vm-debugging.md)) so the
@@ -107,8 +107,16 @@ Link as a static `libc.a` listed in the `.def`.
 - The NetWare 3.x kernel (SERVER.EXE) public-symbol list and how to produce an `.imp` for it:
   documented "operating system public symbols" in Novell's 3.x developer docs, or dump from a
   live server (nlmimp reads NLMs, SERVER.EXE is not one — different extraction needed).
-- Exact 3.x semantics/signatures of: `Alloc`, `AllocateResourceTag`, relinquish-control, and the
-  interrupt-hook exports; CPU-hog watchdog behavior on 3.x.
+- Exact 3.x semantics/signatures of: `Alloc`, `AllocateResourceTag`, relinquish-control; CPU-hog
+  watchdog behavior on 3.x. (The interrupt-hook export is no longer open — confirmed as
+  `SetHardwareInterrupt`/`ClearHardwareInterrupt`, declared in `NLM/NOVH/ADVANCED.H` on the NDK
+  SDK ISO and documented in its `LIBREF` reference book. Found by extracting the whole ISO with
+  `pip install pycdlib` into a disposable venv — no root/mount/`7z` needed — then `grep -r`ing the
+  result, including the DynaText `.DAT` doc files under `DOC/ENGLISH/*/BOOKS/*/EBT/`, which are
+  plain text with SGML tags and readable with `grep -a`. Worth reusing this technique for the
+  `SERVER.EXE` symbol list and `Alloc`/`AllocateResourceTag` items above. Full detail, including
+  the SFT III deprecation caveat (irrelevant for a plain 3.11/3.12 target):
+  [doom-port.md](doom-port.md).)
 - NetWare 3.x has a **built-in kernel debugger** (console keyboard chord, e.g.
   Alt+Shift+Shift+Esc — verify the exact chord for 3.12) — potentially valuable in the QEMU
   debugging loop.

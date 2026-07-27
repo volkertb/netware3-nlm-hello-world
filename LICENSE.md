@@ -38,11 +38,27 @@ Volkert de Buisonjé.
 
 ## VGA mode-setting code (vgamode.c, nlm_io_wrapper.c, putpixel in hello_vga.c)
 
-Copied/adapted from osdev.org forum posts and the OSDev wiki's "Drawing In a Linear Framebuffer"
-page; exact source URLs are kept in the file headers. The forum posts state no explicit license,
-so treat these files as attribution-only reference code rather than clearly-licensed. If license
-clarity ever matters, equivalent register-programming code exists in Chris Giese's explicitly
-public-domain modes.c (mirror link in README.md), which these could be rebased onto.
+Copied/adapted from two different osdev.org forum posts plus an OSDev wiki page; exact source
+URLs are kept in each file's header comment - these three files are not all the same provenance.
+
+- `vgamode.c` (`https://forum.osdev.org/viewtopic.php?p=69240#p69240`): confirmed **public
+  domain**, per the thread's own text (2026-07-27; the forum blocks automated fetches, so this
+  was read directly rather than tool-verified). Corroborated by a Wayback Machine capture of a
+  page that same thread references, Chris Giese's `modes.c` - "This code is public domain (no
+  copyright). You can do whatever you want with it." (`shared/Wayback Machine_vga_modes_c.pdf`,
+  archived 2002-11-15 from `my.execpc.com/~geezer`) - the same public-domain file already vendored
+  in this repo as `modes.c`.
+- `nlm_io_wrapper.c` (`https://forum.osdev.org/viewtopic.php?p=69241#p69241`): a different post in
+  the same thread - **not yet confirmed** to carry the same public-domain statement as p=69240.
+  Treat as attribution-only reference code until checked.
+- `hello_vga.c`'s `putpixel` (`https://wiki.osdev.org/Drawing_In_a_Linear_Framebuffer`): an OSDev
+  *wiki* page, not the forum - separate site section, **not yet confirmed** for this specific
+  page. (OSDev Wiki's general policy since 2011 requires new content to be public-domain-
+  compatible, which is suggestive but not a substitute for checking this page directly.)
+
+If license clarity for the unconfirmed two ever matters, equivalent register-programming code
+exists in Chris Giese's explicitly public-domain `modes.c` (mirror link in README.md), which
+these could be rebased onto instead.
 
 ## Music asset (downloads/DUNE0.ADL)
 
