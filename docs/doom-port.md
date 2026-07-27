@@ -50,41 +50,31 @@ because `LICENSE.md` describes per-component licensing that matters a lot here:
 - `adlib_util.c` currently ships under this project's own (unstated/all-rights-reserved) license,
   but it's Volkert de Buisonjé's own code — he can simply also license it GPL-2.0 for use inside
   `DOOM.NLM`. Not a blocker, just a `LICENSE.md` entry to add when it's wired in.
-- **`vgamode.c`/`nlm_io_wrapper.c`/`hello_vga.c`'s `putpixel`: provenance nailed down enough to
-  unblock, not enough to call closed — see "VGA source provenance" below, now the top priority in
-  this plan.** Public-domain code is GPL-compatible; the osdev.org-sourced status of these three
-  files needs to be on solid ground, in writing, before they're linked into a GPL-2.0 binary.
+- `vgamode.c`/`nlm_io_wrapper.c`/`hello_vga.c`'s `putpixel`: resolved — see "VGA source
+  provenance" below and `LICENSE.md`. Public-domain code is GPL-compatible, and all three are now
+  confirmed public domain/CC0.
 - The IWAD (`DOOM1.WAD`) is game data, not code — GPL doesn't apply to it, but it still needs to
   be the freely-redistributable shareware episode, not a commercial WAD (see MVP essentials below).
 - When the Doom sources actually land (own subdirectory, presumably), add a `LICENSE.md` entry for
   it following the existing per-component pattern, and vendor the GPL-2.0 license text alongside
   the source (same as `nlm-kit`'s bundled `COPYING.LIB`).
 
-## VGA source provenance: high priority, resolve before any other Doom work (2026-07-27)
+## VGA source provenance: resolved (2026-07-27)
 
 `hello_vga.c` uses `vgamode.h`'s `init_graph_vga()` for the actual mode-13h graphics switch (text
-restore already goes through the unambiguous `modes.c`). Status of the three files sourced from
-osdev.org, per `LICENSE.md`:
+restore already goes through the unambiguous `modes.c`). All three files sourced from osdev.org
+are now confirmed public domain (details and citations in `LICENSE.md`):
 
-- **`vgamode.c`** (`https://forum.osdev.org/viewtopic.php?p=69240#p69240`): the thread states the
-  code is public domain, confirmed by directly reading the page — the forum blocks automated
-  fetches, so this isn't backed by a durable, quotable source the way `modes.c`'s PD status is (an
-  actual archived capture with the literal license text preserved,
-  `shared/Wayback Machine_vga_modes_c.pdf`). Good enough to unblock planning; get an equivalent
-  durable citation (a Wayback Machine snapshot of that exact post, if one was ever crawled, or a
-  saved capture/quote of the live page) before treating it as settled for something that ships.
-- **`nlm_io_wrapper.c`** (`p=69241`, a different post in the same thread): not checked at all yet.
-  Same thread, but a different post can carry different terms — don't assume it inherits p=69240's
-  statement without looking.
-- **`hello_vga.c`'s `putpixel`** (`https://wiki.osdev.org/Drawing_In_a_Linear_Framebuffer`): a
-  separate OSDev *wiki* page, not the forum. OSDev Wiki's general policy since 2011 requires new
-  content to be public-domain-compatible, which is suggestive but isn't a substitute for checking
-  this specific page.
+- **`vgamode.c`** (`p=69240`): the forum thread's original poster shared this code; another user
+  replied in-thread identifying it as public domain, matching Chris Giese's already-vendored,
+  Wayback-archived-PD `modes.c`.
+- **`nlm_io_wrapper.c`** (`p=69241`, same thread): the original poster's very next post, one minute
+  after the `vgamode.c` post, covered by that same in-thread public-domain reply.
+- **`hello_vga.c`'s `putpixel`** (the OSDev wiki page): covered by the wiki's own CC0 policy for
+  all content added since June 6, 2011 — this page was created in 2021, well after that cutoff.
 
-**The escape hatch, if any of the three can't be nailed down**: none of them are actually
-load-bearing. `modes.c` (already unambiguously public domain, already vendored, already used for
-the text-mode restore) turns out to have full functional parity for what this project uses today
-and for Doom's MVP — checked by reading both files in full:
+The `modes.c` consolidation below remains worth doing on functional-parity grounds even though the
+licensing question that originally motivated it is now closed — kept for reference:
 
 - `write_regs(g_320x200x256)` is `modes.c`'s equivalent of `vgamode.c`'s
   `init_graph_vga(320, 200, 1)` — an exact canned register dump for mode 13h, not something
@@ -98,10 +88,9 @@ and for Doom's MVP — checked by reading both files in full:
   exactly 320×200×256 — nothing `modes.c` doesn't already have.
 
 So: rebasing `hello_vga.c` (and `DOOM.NLM`'s platform layer) onto `modes.c` for the mode-13h switch
-and pixel plot removes the provenance question entirely, at zero functional cost for anything this
-project currently does or plans. Investigate the three osdev.org sources first since durable
-answers are valuable regardless (they're small, self-contained, worth just knowing); fall back to
-the `modes.c` consolidation if that investigation stalls rather than let it block the Doom work.
+and pixel plot would be a no-op change in file count/dependencies, at zero functional cost for
+anything this project currently does or plans — worth doing opportunistically, but no longer
+blocking anything now that provenance is resolved.
 
 ## MVP scope
 
@@ -186,16 +175,12 @@ other open research items in [ndk-independence.md](ndk-independence.md) (kernel 
 
 ## Next steps, in order
 
-1. **VGA source provenance** (high priority, do first — see above): nail down `vgamode.c`
-   (durable citation), `nlm_io_wrapper.c` (`p=69241`, unchecked), and `putpixel`'s wiki page
-   (unchecked); fall back to consolidating onto `modes.c` if that stalls. Small, self-contained,
-   and removes a licensing question before any GPL-2.0 code enters the repo.
-2. **MVP**: pull doomgeneric source, check its license/vendoring implications, scaffold the
+1. **MVP**: pull doomgeneric source, check its license/vendoring implications, scaffold the
    platform layer (`DG_*` implementations calling into the now-resolved VGA code/`adlib_util.c`),
    resolve the essentials above, boot-test in the QEMU sidecar.
-3. **Sound Blaster**: port FastDoom's `ns_sb.c` DSP/mixer logic (already pure port I/O), replace
+2. **Sound Blaster**: port FastDoom's `ns_sb.c` DSP/mixer logic (already pure port I/O), replace
    its DOS-extender IRQ install (`_dos_setvect`/DPMI) with `SetHardwareInterrupt`/
    `ClearHardwareInterrupt`, hand-roll 8237 DMA programming via direct port I/O.
-4. **General MIDI**: likely synchronous register/UART writes similar to OPL2 — no interrupt
+3. **General MIDI**: likely synchronous register/UART writes similar to OPL2 — no interrupt
    needed, TBD once reached.
-5. **LAN support**: deferred; `NWIPXSPX.H` is already among the SDK headers this project uses.
+4. **LAN support**: deferred; `NWIPXSPX.H` is already among the SDK headers this project uses.

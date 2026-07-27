@@ -41,24 +41,27 @@ Volkert de Buisonjé.
 Copied/adapted from two different osdev.org forum posts plus an OSDev wiki page; exact source
 URLs are kept in each file's header comment - these three files are not all the same provenance.
 
-- `vgamode.c` (`https://forum.osdev.org/viewtopic.php?p=69240#p69240`): confirmed **public
-  domain**, per the thread's own text (2026-07-27; the forum blocks automated fetches, so this
-  was read directly rather than tool-verified). Corroborated by a Wayback Machine capture of a
-  page that same thread references, Chris Giese's `modes.c` - "This code is public domain (no
-  copyright). You can do whatever you want with it." (`shared/Wayback Machine_vga_modes_c.pdf`,
-  archived 2002-11-15 from `my.execpc.com/~geezer`) - the same public-domain file already vendored
-  in this repo as `modes.c`.
-- `nlm_io_wrapper.c` (`https://forum.osdev.org/viewtopic.php?p=69241#p69241`): a different post in
-  the same thread - **not yet confirmed** to carry the same public-domain statement as p=69240.
-  Treat as attribution-only reference code until checked.
-- `hello_vga.c`'s `putpixel` (`https://wiki.osdev.org/Drawing_In_a_Linear_Framebuffer`): an OSDev
-  *wiki* page, not the forum - separate site section, **not yet confirmed** for this specific
-  page. (OSDev Wiki's general policy since 2011 requires new content to be public-domain-
-  compatible, which is suggestive but not a substitute for checking this page directly.)
-
-If license clarity for the unconfirmed two ever matters, equivalent register-programming code
-exists in Chris Giese's explicitly public-domain `modes.c` (mirror link in README.md), which
-these could be rebased onto instead.
+- `vgamode.c` (`https://forum.osdev.org/viewtopic.php?p=69240#p69240`, thread "Switch to Graphics
+  mode in Protected mode", `https://forum.osdev.org/viewtopic.php?t=10534`): **public domain**.
+  Original poster srg_13 shared this file's `init_graph_vga()` code; another user, bubach, replies
+  in the same thread: "It's public domain, and probably from (or a variation of):
+  http://my.execpc.com/~geezer/osd/graphics/modes.c ... all that I've seen is PD." - Chris Giese's
+  `modes.c`, the same public-domain file already vendored in this repo as `modes.c`, corroborated
+  by a Wayback Machine capture (`shared/Wayback Machine_vga_modes_c.pdf`, archived 2002-11-15 from
+  `my.execpc.com/~geezer`): "This code is public domain (no copyright). You can do whatever you
+  want with it."
+- `nlm_io_wrapper.c` (`https://forum.osdev.org/viewtopic.php?p=69241#p69241`, same thread as
+  above): **public domain**. This is srg_13's very next post in the same thread, one minute after
+  the `vgamode.c` post ("You might also need:"), containing this file's `outw()`/`outb()`
+  functions - covered by the same public-domain reply from bubach, which follows both posts and
+  addresses srg_13's code as a whole.
+- `hello_vga.c`'s `putpixel` (`https://wiki.osdev.org/Drawing_In_a_Linear_Framebuffer`): **public
+  domain** (CC0), per the wiki's own licensing page (`https://wiki.osdev.org/OSDev_Wiki:Copyrights`):
+  "All content of this wiki, added since June 6 of 2011, is licensed under CC0" (the legal
+  equivalent of public domain). This page's edit history shows it was created 2021-05-27, entirely
+  after that cutoff, so its current content is covered. (The wiki's CC0 policy explicitly excludes
+  forum posts - `https://wiki.osdev.org/OSDev_Wiki:License` - which is why the two entries above
+  are argued from the forum posts' own text instead of this policy.)
 
 ## Music asset (downloads/DUNE0.ADL)
 
