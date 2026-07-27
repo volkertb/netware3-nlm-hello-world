@@ -14,7 +14,7 @@ devcontainer. Original author and primary human maintainer: Volkert de Buisonjé
   slip through), and packs both into `floppy.img` via `mtools`. Works only inside the devcontainer
   (`/usr/nwsdk` + the patched `nlmconv`/`i386-netware-ld` toolchain).
 - `*.def` files are the NLM header/link definitions consumed by `nlmconv`.
-- `hello_vga.nlm` links `vgamode.o`/`modes.o`/`nlm_io_wrapper.o` as separately-compiled objects
+- `hellovga.nlm` links `vgamode.o`/`modes.o`/`nlm_io_wrapper.o` as separately-compiled objects
   (each with its own header) rather than `#include`-splicing their `.c` files into `hello_vga.c` —
   the earlier splice relied on implicit, same-translation-unit ordering that gcc ≥ 14 no longer
   tolerates: [docs/nlm-toolchain-notes.md](docs/nlm-toolchain-notes.md)'s gcc-landmine watch list.

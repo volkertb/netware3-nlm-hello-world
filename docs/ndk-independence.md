@@ -127,10 +127,10 @@ QEMU sidecar (boot/shutdown, floppy load, keyboard injection, VNC), direct-hardw
 (mode switch, palette fade, picture display), text-mode restore on exit, and AdLib sound are all
 done — see [qemu-vm-debugging.md](qemu-vm-debugging.md) and [sound.md](sound.md).
 
-**Track A, next up:** Sound Blaster (see [sound.md](sound.md)) and, lower priority, other VGA
-modes/Mode X, built and boot-tested the same way the graphics work was, still on the existing
-NDK/CLIB toolchain. Keyboard IRQ hooking (see "Game platform" above) fits here too if it comes up
-before Track B.
+**Track A, next up:** the Doom port ([doom-port.md](doom-port.md)) is the concrete next goal —
+MVP first (existing VGA/AdLib work plus keyboard, with IRQ hooking now part of the MVP itself
+rather than deferred), Sound Blaster/General MIDI/LAN sequenced within that plan's own later
+phases. Other VGA modes/Mode X stay lower priority, still on the existing NDK/CLIB toolchain.
 
 **Track B, once Track A's experiments are done:** tier 1+2 (NDK-free, verified by sidecar boots)
 → mini-libc (picolibc) port → repeat Track A's graphics/sound experiments on the NDK-free stack
